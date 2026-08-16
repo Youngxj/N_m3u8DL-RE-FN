@@ -7,6 +7,8 @@
 - **项目主页**：<https://github.com/Youngxj/N_m3u8DL-RE-FN>
 - **引擎**：[nilaoda/N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE)
 
+![应用界面预览](preview.png)
+
 ## 功能亮点
 
 - **Web 管理界面**（飞牛原生 index.cgi）：应用卡片打开即用，任务提交、**实时进度**（速度/已下载/总量/分片/剩余时间/流类型）、文件管理
