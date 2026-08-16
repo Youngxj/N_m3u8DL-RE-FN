@@ -267,6 +267,8 @@ task_json() {
   fi
   # 最新一行（去掉空行与纯进度条碎片；注意字符类中 - 必须放最后，避免 Invalid range）
   lastline="$(printf '%s\n' "$lograw" | grep -vE '^[[:space:]]*$' | grep -vE '^\[[#. =-]*\]$' | tail -n 1)"
+  # 截断超长明细（如停止任务残留的长进度帧），避免前端卡片被撑超宽
+  lastline="${lastline:0:300}"
 
   stage="处理中"
   if [ "$status" = "success" ]; then

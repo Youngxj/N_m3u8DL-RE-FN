@@ -50,6 +50,7 @@ function fmtSize(bytes) {
   return v.toFixed(v >= 100 ? 0 : 1) + ' ' + u[i];
 }
 function fmtSpeed(s) { return s ? fmtSize(s) + '/s' : ''; }
+function dirOf(p) { return String(p || '').replace(/\/[^/]*$/, '') || '/'; }
 function fmtTime(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -527,12 +528,16 @@ async function loadFiles() {
         <span class="file-meta">${fmtSize(f.size)} · ${fmtTime(f.mtime)}</span>
         <span class="file-actions">
           <button class="btn btn-sm btn-outline-primary btn-fopen" data-path="${esc(f.realPath || f.path)}" data-name="${esc(f.name)}">打开</button>
+          <button class="btn btn-sm btn-outline-primary btn-fopendir" data-dir="${esc(dirOf(f.realPath || f.path))}">打开目录</button>
           <a class="btn btn-sm btn-outline-secondary" href="${API({ action: 'download', path: f.path })}">下载</a>
           <button class="btn btn-sm btn-outline-danger btn-fdel" data-path="${esc(f.path)}">删除</button>
         </span>
       </div>`).join('');
     box.querySelectorAll('.btn-fopen').forEach((b) => {
       b.addEventListener('click', () => openViaFn('openFile', b.dataset.path, b.dataset.name));
+    });
+    box.querySelectorAll('.btn-fopendir').forEach((b) => {
+      b.addEventListener('click', () => openViaFn('openFileManager', b.dataset.dir, b.dataset.dir));
     });
     box.querySelectorAll('.btn-fdel').forEach((b) => {
       b.addEventListener('click', async () => {
