@@ -5,6 +5,36 @@
 const API = (params) => '?' + new URLSearchParams(params).toString();
 const $ = (id) => document.getElementById(id);
 
+// ---------- 轻提示 / 确认（Bootstrap 组件；fnOS iframe 中 alert/confirm 可能被屏蔽） ----------
+function uiToast(msg, type = 'danger') {
+  const box = $('toast-box');
+  if (!box) { console.error(msg); return; }
+  const cls = type === 'success' ? 'text-bg-success' : type === 'warn' ? 'text-bg-warning' : 'text-bg-danger';
+  const el = document.createElement('div');
+  el.className = 'toast align-items-center ' + cls + ' border-0';
+  el.setAttribute('role', 'alert');
+  el.innerHTML = '<div class="d-flex"><div class="toast-body">' + esc(msg) + '</div>' +
+    '<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+  box.appendChild(el);
+  const t = new bootstrap.Toast(el, { delay: 4500 });
+  el.addEventListener('hidden.bs.toast', () => el.remove());
+  t.show();
+}
+
+// 确认弹窗（替代 confirm，返回 Promise<boolean>）
+function uiConfirm(msg) {
+  return new Promise((resolve) => {
+    $('confirm-text').textContent = msg;
+    const modal = new bootstrap.Modal($('confirmModal'));
+    let done = false;
+    const finish = (v) => { if (!done) { done = true; modal.hide(); resolve(v); } };
+    $('confirm-yes').onclick = () => finish(true);
+    $('confirm-no').onclick = () => finish(false);
+    $('confirmModal').addEventListener('hidden.bs.modal', () => finish(false), { once: true });
+    modal.show();
+  });
+}
+
 const STATUS_TEXT = {
   queued: '排队中', running: '下载中', stopping: '停止中',
   success: '已完成', failed: '失败', stopped: '已停止',
@@ -43,8 +73,8 @@ function renderTasks() {
     if (!card) return;
     card.querySelector('.btn-stop')?.addEventListener('click', () => act({ action: 'stop', id: t.id }));
     card.querySelector('.btn-retry')?.addEventListener('click', () => retry(t));
-    card.querySelector('.btn-del')?.addEventListener('click', () => {
-      if (confirm('确定删除任务「' + t.name + '」的记录吗？（不会删除已下载文件）')) act({ action: 'remove', id: t.id });
+    card.querySelector('.btn-del')?.addEventListener('click', async () => {
+      if (await uiConfirm('确定删除任务「' + t.name + '」的记录吗？（不会删除已下载文件）')) act({ action: 'remove', id: t.id });
     });
     wireOpenButtons(card, t);
   });
@@ -116,15 +146,16 @@ function taskCard(t) {
   </div>`;
 }
 
-// 调用 fnOS 打开任务文件/目录
+// 调用 fnOS 打开任务文件/目录（优先使用真实路径 /vol1/...，fnOS 才能识别）
 function wireOpenButtons(card, t) {
+  const realDir = t.realOutDir || t.outDir;
   card.querySelector('.btn-open-file')?.addEventListener('click', () => {
     if (t.outputFiles && t.outputFiles.length) {
-      openViaFn('openFile', t.outDir.replace(/\/+$/, '') + '/' + t.outputFiles[0]);
+      openViaFn('openFile', realDir.replace(/\/+$/, '') + '/' + t.outputFiles[0], t.outputFiles[0]);
     }
   });
   card.querySelector('.btn-open-dir')?.addEventListener('click', () => {
-    openViaFn('openFileManager', t.outDir);
+    openViaFn('openFileManager', realDir, t.name);
   });
 }
 
@@ -140,7 +171,7 @@ async function act(params) {
     const res = await fetch(API(params));
     return await res.json();
   } catch (e) {
-    alert('操作失败: ' + e.message);
+    uiToast('操作失败: ' + e.message);
     return { ok: false };
   }
 }
@@ -152,127 +183,194 @@ async function refreshTasks() {
       tasks = data.tasks;
       dir = data.dir || dir;
       renderTasks();
-      $('svc-dir').textContent = dir;
-      $('svc-dir').title = '默认输出目录：' + dir;
     }
   } catch (_) { /* 网络抖动忽略 */ }
 }
 
 // ---------- 配置字段定义（对应 N_m3u8DL-RE 全部命令行参数，中文说明） ----------
-// 每个分区：checks=勾选项（一行排布），fields=文本/数字/下拉/多行（统一网格）
+// 每区 = 若干分组：{ title, checks=[], fields=[] }
 const CFG_FIELDS = {
-  basic: {
-    checks: [
-      { key: 'auto', label: '自动选择最佳音视频', def: true, hint: '--auto-select' },
-      { key: 'concurrent', label: '并发下载音视频/字幕', hint: '-mt' },
-      { key: 'subonly', label: '只下载字幕', hint: '--sub-only' },
-      { key: 'live', label: '直播按点播方式下载', hint: '--live-perform-as-vod' },
-    ],
-    fields: [
-      { key: 'save_pattern', label: '保存命名模板', type: 'text', placeholder: '<SaveName>_<Resolution>', hint: '变量：<SaveName> <Resolution> <Codecs> <Language> <Bandwidth> <MediaType> <Channels> <FrameRate> <VideoRange> <GroupId> <Ext>' },
-      { key: 'threads', label: '下载线程数', type: 'number', placeholder: '默认=CPU线程数', hint: '--thread-count' },
-      { key: 'mux', label: '完成后混流格式', type: 'select', options: [['', '不混流'], ['mkv', 'mkv'], ['mp4', 'mp4']], hint: '-M format=mkv/mp4' },
-      { key: 'sub_format', label: '字幕输出格式', type: 'select', options: [['SRT', 'SRT'], ['VTT', 'VTT']], hint: '--sub-format' },
-      { key: 'max_speed', label: '下载限速', type: 'text', placeholder: '如 15M / 100K', hint: '-R --max-speed' },
-    ],
-  },
-  advanced: {
-    checks: [
-      { key: 'use_system_proxy', label: '使用系统代理', def: true, hint: '--use-system-proxy' },
-      { key: 'skip_merge', label: '跳过合并分片', hint: '--skip-merge' },
-      { key: 'binary_merge', label: '二进制合并（不依赖 ffmpeg）', hint: '--binary-merge' },
-      { key: 'append_url_params', label: '分片附加输入URL参数', hint: '--append-url-params' },
-      { key: 'no_date_info', label: '混流不写入日期信息', hint: '--no-date-info' },
-      { key: 'mp4_real_time_decryption', label: '实时解密 MP4 分片', hint: '--mp4-real-time-decryption' },
-      { key: 'disable_update_check', label: '禁用版本更新检测', hint: '--disable-update-check' },
-      { key: 'no_log', label: '关闭日志文件输出', hint: '--no-log' },
-      { key: 'live_real_time_merge', label: '直播实时合并', hint: '--live-real-time-merge' },
-      { key: 'live_keep_segments', label: '实时合并时保留分片', def: true, hint: '--live-keep-segments' },
-      { key: 'live_pipe_mux', label: '直播管道实时混流', hint: '--live-pipe-mux（网络不稳定勿开）' },
-    ],
-    fields: [
-      { key: 'tmp_dir', label: '临时文件目录', type: 'text', placeholder: '/tmp', hint: '--tmp-dir' },
-      { key: 'retry_count', label: '分片失败重试次数', type: 'number', def: 3, hint: '--download-retry-count' },
-      { key: 'timeout', label: 'HTTP 请求超时(秒)', type: 'number', def: 100, hint: '--http-request-timeout' },
-      { key: 'custom_proxy', label: '自定义代理', type: 'text', placeholder: 'http://127.0.0.1:8888', hint: '--custom-proxy' },
-      { key: 'headers', label: '自定义请求头', type: 'textarea', placeholder: 'Cookie: xxx\nUser-Agent: iOS', hint: '-H 每行一个' },
-      { key: 'custom_range', label: '仅下载部分分片', type: 'text', placeholder: '0-10 / 10- / 05:00-20:00', hint: '--custom-range' },
-      { key: 'task_start_at', label: '定时开始任务', type: 'text', placeholder: 'yyyyMMddHHmmss', hint: '--task-start-at' },
-      { key: 'base_url', label: '指定 BaseURL', type: 'text', placeholder: 'https://cdn.example.com/', hint: '--base-url' },
-      { key: 'select_video', label: '选择视频流(正则)', type: 'text', placeholder: 'best / res="3840*":codecs=hvc1', hint: '-sv --select-video' },
-      { key: 'select_audio', label: '选择音频流(正则)', type: 'text', placeholder: 'lang=en:for=best', hint: '-sa --select-audio' },
-      { key: 'select_subtitle', label: '选择字幕流(正则)', type: 'text', placeholder: 'name="中文":for=all', hint: '-ss --select-subtitle' },
-      { key: 'drop_video', label: '排除视频流(正则)', type: 'text', hint: '-dv --drop-video' },
-      { key: 'drop_audio', label: '排除音频流(正则)', type: 'text', hint: '-da --drop-audio' },
-      { key: 'drop_subtitle', label: '排除字幕流(正则)', type: 'text', hint: '-ds --drop-subtitle' },
-      { key: 'ad_keyword', label: '广告分片过滤(正则)', type: 'text', hint: '--ad-keyword' },
-      { key: 'key', label: '解密密钥', type: 'text', placeholder: 'KID1:KEY1 或 KEY', hint: '--key' },
-      { key: 'key_text_file', label: '密钥文件', type: 'text', hint: '--key-text-file' },
-      { key: 'decryption_engine', label: '解密引擎', type: 'select', options: [['MP4DECRYPT', 'MP4DECRYPT'], ['FFMPEG', 'FFMPEG'], ['SHAKA_PACKAGER', 'SHAKA_PACKAGER']], hint: '--decryption-engine' },
-      { key: 'decryption_binary_path', label: '解密工具路径', type: 'text', hint: '--decryption-binary-path' },
-      { key: 'custom_hls_method', label: 'HLS 加密方式', type: 'select', options: [['', '自动'], ['AES_128', 'AES_128'], ['AES_128_ECB', 'AES_128_ECB'], ['CENC', 'CENC'], ['CHACHA20', 'CHACHA20'], ['NONE', 'NONE'], ['SAMPLE_AES', 'SAMPLE_AES'], ['SAMPLE_AES_CTR', 'SAMPLE_AES_CTR'], ['UNKNOWN', 'UNKNOWN']], hint: '--custom-hls-method' },
-      { key: 'custom_hls_key', label: 'HLS 解密 KEY', type: 'text', hint: '--custom-hls-key (FILE/HEX/BASE64)' },
-      { key: 'custom_hls_iv', label: 'HLS 解密 IV', type: 'text', hint: '--custom-hls-iv (FILE/HEX/BASE64)' },
-      { key: 'log_level', label: '日志级别', type: 'select', options: [['', '默认(INFO)'], ['DEBUG', 'DEBUG'], ['INFO', 'INFO'], ['WARN', 'WARN'], ['ERROR', 'ERROR'], ['OFF', 'OFF']], hint: '--log-level' },
-      { key: 'live_record_limit', label: '直播录制时长限制', type: 'text', placeholder: '01:00:00', hint: '--live-record-limit HH:mm:ss' },
-      { key: 'live_wait_time', label: '直播列表刷新间隔(秒)', type: 'number', hint: '--live-wait-time' },
-    ],
-  },
+  basic: [
+    {
+      title: '下载选项',
+      checks: [
+        { key: 'auto', label: '自动选择最佳音视频', def: true, hint: '--auto-select' },
+        { key: 'concurrent', label: '并发下载音视频/字幕', hint: '-mt' },
+      ],
+      fields: [
+        { key: 'threads', label: '下载线程数', type: 'number', placeholder: '默认=CPU线程数', hint: '--thread-count' },
+        { key: 'max_speed', label: '下载限速', type: 'text', placeholder: '如 15M / 100K', hint: '-R --max-speed' },
+      ],
+    },
+    {
+      title: '输出与命名',
+      fields: [
+        { key: 'save_pattern', label: '保存命名模板', type: 'text', placeholder: '<SaveName>_<Resolution>', hint: '变量：<SaveName> <Resolution> <Codecs> <Language> <Bandwidth> <MediaType> <Channels> <FrameRate> <VideoRange> <GroupId> <Ext>' },
+      ],
+    },
+    {
+      title: '混流与字幕',
+      checks: [{ key: 'subonly', label: '只下载字幕', hint: '--sub-only' }],
+      fields: [
+        { key: 'mux', label: '完成后混流格式', type: 'select', options: [['', '不混流'], ['mkv', 'mkv'], ['mp4', 'mp4']], hint: '-M format=mkv/mp4' },
+        { key: 'sub_format', label: '字幕输出格式', type: 'select', options: [['SRT', 'SRT'], ['VTT', 'VTT']], hint: '--sub-format' },
+      ],
+    },
+    {
+      title: '直播',
+      checks: [{ key: 'live', label: '直播按点播方式下载', hint: '--live-perform-as-vod' }],
+      fields: [],
+    },
+  ],
+  advanced: [
+    {
+      title: '网络与代理',
+      checks: [{ key: 'use_system_proxy', label: '使用系统代理', def: true, hint: '--use-system-proxy' }],
+      fields: [
+        { key: 'custom_proxy', label: '自定义代理', type: 'text', placeholder: 'http://127.0.0.1:8888', hint: '--custom-proxy' },
+        { key: 'headers', label: '自定义请求头', type: 'textarea', placeholder: 'Cookie: xxx\nUser-Agent: iOS', hint: '-H 每行一个' },
+        { key: 'timeout', label: 'HTTP 请求超时(秒)', type: 'number', def: 100, hint: '--http-request-timeout' },
+        { key: 'retry_count', label: '分片失败重试次数', type: 'number', def: 3, hint: '--download-retry-count' },
+        { key: 'custom_range', label: '仅下载部分分片', type: 'text', placeholder: '0-10 / 10- / 05:00-20:00', hint: '--custom-range' },
+        { key: 'base_url', label: '指定 BaseURL', type: 'text', placeholder: 'https://cdn.example.com/', hint: '--base-url' },
+      ],
+    },
+    {
+      title: '任务计划',
+      fields: [
+        { key: 'task_start_at', label: '定时开始任务', type: 'datetime-local', hint: '--task-start-at（选择时间，格式自动转换）' },
+      ],
+    },
+    {
+      title: '流选择与过滤',
+      fields: [
+        { key: 'select_video', label: '选择视频流(正则)', type: 'text', placeholder: 'best / res="3840*":codecs=hvc1', hint: '-sv --select-video' },
+        { key: 'select_audio', label: '选择音频流(正则)', type: 'text', placeholder: 'lang=en:for=best', hint: '-sa --select-audio' },
+        { key: 'select_subtitle', label: '选择字幕流(正则)', type: 'text', placeholder: 'name="中文":for=all', hint: '-ss --select-subtitle' },
+        { key: 'drop_video', label: '排除视频流(正则)', type: 'text', hint: '-dv --drop-video' },
+        { key: 'drop_audio', label: '排除音频流(正则)', type: 'text', hint: '-da --drop-audio' },
+        { key: 'drop_subtitle', label: '排除字幕流(正则)', type: 'text', hint: '-ds --drop-subtitle' },
+        { key: 'ad_keyword', label: '广告分片过滤(正则)', type: 'text', hint: '--ad-keyword' },
+      ],
+    },
+    {
+      title: '合并与临时文件',
+      checks: [
+        { key: 'skip_merge', label: '跳过合并分片', hint: '--skip-merge' },
+        { key: 'binary_merge', label: '二进制合并（不依赖 ffmpeg）', hint: '--binary-merge' },
+        { key: 'append_url_params', label: '分片附加输入URL参数', hint: '--append-url-params' },
+        { key: 'no_date_info', label: '混流不写入日期信息', hint: '--no-date-info' },
+      ],
+      fields: [
+        { key: 'tmp_dir', label: '临时文件目录', type: 'text', placeholder: '/tmp', hint: '--tmp-dir' },
+      ],
+    },
+    {
+      title: '解密与 HLS 自定义',
+      checks: [{ key: 'mp4_real_time_decryption', label: '实时解密 MP4 分片', hint: '--mp4-real-time-decryption' }],
+      fields: [
+        { key: 'key', label: '解密密钥', type: 'text', placeholder: 'KID1:KEY1 或 KEY', hint: '--key' },
+        { key: 'key_text_file', label: '密钥文件', type: 'text', hint: '--key-text-file' },
+        { key: 'decryption_engine', label: '解密引擎', type: 'select', options: [['MP4DECRYPT', 'MP4DECRYPT'], ['FFMPEG', 'FFMPEG'], ['SHAKA_PACKAGER', 'SHAKA_PACKAGER']], hint: '--decryption-engine' },
+        { key: 'decryption_binary_path', label: '解密工具路径', type: 'text', hint: '--decryption-binary-path' },
+        { key: 'custom_hls_method', label: 'HLS 加密方式', type: 'select', options: [['', '自动'], ['AES_128', 'AES_128'], ['AES_128_ECB', 'AES_128_ECB'], ['CENC', 'CENC'], ['CHACHA20', 'CHACHA20'], ['NONE', 'NONE'], ['SAMPLE_AES', 'SAMPLE_AES'], ['SAMPLE_AES_CTR', 'SAMPLE_AES_CTR'], ['UNKNOWN', 'UNKNOWN']], hint: '--custom-hls-method' },
+        { key: 'custom_hls_key', label: 'HLS 解密 KEY', type: 'text', hint: '--custom-hls-key (FILE/HEX/BASE64)' },
+        { key: 'custom_hls_iv', label: 'HLS 解密 IV', type: 'text', hint: '--custom-hls-iv (FILE/HEX/BASE64)' },
+      ],
+    },
+    {
+      title: '日志与更新',
+      checks: [
+        { key: 'no_log', label: '关闭日志文件输出', hint: '--no-log' },
+        { key: 'disable_update_check', label: '禁用版本更新检测', hint: '--disable-update-check' },
+      ],
+      fields: [
+        { key: 'log_level', label: '日志级别', type: 'select', options: [['', '默认(INFO)'], ['DEBUG', 'DEBUG'], ['INFO', 'INFO'], ['WARN', 'WARN'], ['ERROR', 'ERROR'], ['OFF', 'OFF']], hint: '--log-level' },
+      ],
+    },
+    {
+      title: '直播高级',
+      checks: [
+        { key: 'live_real_time_merge', label: '直播实时合并', hint: '--live-real-time-merge' },
+        { key: 'live_keep_segments', label: '实时合并时保留分片', def: true, hint: '--live-keep-segments' },
+        { key: 'live_pipe_mux', label: '直播管道实时混流', hint: '--live-pipe-mux（网络不稳定勿开）' },
+      ],
+      fields: [
+        { key: 'live_record_limit', label: '直播录制时长限制', type: 'text', placeholder: '01:00:00', hint: '--live-record-limit HH:mm:ss' },
+        { key: 'live_wait_time', label: '直播列表刷新间隔(秒)', type: 'number', hint: '--live-wait-time' },
+      ],
+    },
+  ],
 };
 
-// 生成配置表单（勾选项集中一行，其余字段统一网格；Bootstrap 组件）
+// 生成配置表单（按分组渲染：组标题 + 勾选行 + 字段网格；Bootstrap 组件）
 function buildCfgForm() {
-  for (const [section, cfg] of Object.entries(CFG_FIELDS)) {
+  for (const [section, groups] of Object.entries(CFG_FIELDS)) {
     const box = $('cfg-' + section);
     if (!box) continue;
-    const checksHtml = (cfg.checks || []).map((f) =>
-      `<div class="form-check form-check-inline cfg-check" title="${esc(f.hint || '')}">` +
-      `<input class="form-check-input" type="checkbox" id="cfg-${f.key}" data-cfg="${f.key}"${f.def ? ' checked' : ''} />` +
-      `<label class="form-check-label" for="cfg-${f.key}">${esc(f.label)}</label></div>`
-    ).join('');
-    const fieldsHtml = (cfg.fields || []).map((f) => {
-      const id = 'cfg-' + f.key;
-      if (f.type === 'select') {
-        const opts = f.options.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('');
-        return `<label class="cfg-field"><span>${esc(f.label)}</span><select class="form-select" id="${id}" data-cfg="${f.key}">${opts}</select>${f.hint ? `<span class="cfg-hint">${esc(f.hint)}</span>` : ''}</label>`;
-      }
-      if (f.type === 'textarea') {
-        return `<label class="cfg-field cfg-full"><span>${esc(f.label)}</span><textarea class="form-control" id="${id}" data-cfg="${f.key}" placeholder="${esc(f.placeholder || '')}" rows="2"></textarea>${f.hint ? `<span class="cfg-hint">${esc(f.hint)}</span>` : ''}</label>`;
-      }
-      return `<label class="cfg-field"><span>${esc(f.label)}</span><input class="form-control" type="${f.type}" id="${id}" data-cfg="${f.key}" placeholder="${esc(f.placeholder || '')}" value="${f.def != null ? esc(String(f.def)) : ''}" />${f.hint ? `<span class="cfg-hint">${esc(f.hint)}</span>` : ''}</label>`;
+    box.innerHTML = groups.map((g) => {
+      const checksHtml = (g.checks || []).map((f) =>
+        `<div class="form-check form-check-inline cfg-check" title="${esc(f.hint || '')}">` +
+        `<input class="form-check-input" type="checkbox" id="cfg-${f.key}" data-cfg="${f.key}"${f.def ? ' checked' : ''} />` +
+        `<label class="form-check-label" for="cfg-${f.key}">${esc(f.label)}</label></div>`
+      ).join('');
+      const fieldsHtml = (g.fields || []).map((f) => {
+        const id = 'cfg-' + f.key;
+        if (f.type === 'select') {
+          const opts = f.options.map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('');
+          return `<label class="cfg-field"><span>${esc(f.label)}</span><select class="form-select" id="${id}" data-cfg="${f.key}">${opts}</select>${f.hint ? `<span class="cfg-hint">${esc(f.hint)}</span>` : ''}</label>`;
+        }
+        if (f.type === 'textarea') {
+          return `<label class="cfg-field cfg-full"><span>${esc(f.label)}</span><textarea class="form-control" id="${id}" data-cfg="${f.key}" placeholder="${esc(f.placeholder || '')}" rows="2"></textarea>${f.hint ? `<span class="cfg-hint">${esc(f.hint)}</span>` : ''}</label>`;
+        }
+        return `<label class="cfg-field"><span>${esc(f.label)}</span><input class="form-control" type="${f.type}" id="${id}" data-cfg="${f.key}" placeholder="${esc(f.placeholder || '')}" value="${f.def != null ? esc(String(f.def)) : ''}" />${f.hint ? `<span class="cfg-hint">${esc(f.hint)}</span>` : ''}</label>`;
+      }).join('');
+      return `<div class="cfg-group">` +
+        `<div class="cfg-group-title">${esc(g.title)}</div>` +
+        (checksHtml ? `<div class="cfg-checks">${checksHtml}</div>` : '') +
+        (fieldsHtml ? `<div class="cfg-grid">${fieldsHtml}</div>` : '') +
+        `</div>`;
     }).join('');
-    box.innerHTML = (checksHtml ? `<div class="cfg-checks">${checksHtml}</div>` : '') +
-                    (fieldsHtml ? `<div class="cfg-grid">${fieldsHtml}</div>` : '');
   }
 }
 
-// 收集配置字段 → 请求参数（勾选项显式传 1/0，服务端可据此关闭默认开启的选项）
+// 收集配置字段 → 请求参数（勾选项显式传 1/0；datetime-local 转为 yyyyMMddHHmmss）
 function collectCfgParams(params) {
   document.querySelectorAll('[data-cfg]').forEach((el) => {
     const key = el.dataset.cfg;
     if (el.type === 'checkbox') {
       params[key] = el.checked ? '1' : '0';
-    } else if (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.type === 'text' || el.type === 'number') {
+    } else if (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' || el.type === 'text' || el.type === 'number' || el.type === 'datetime-local') {
       const v = el.value.trim();
-      if (v !== '') params[key] = v;
+      if (v !== '') {
+        params[key] = key === 'task_start_at' ? v.replace(/\D/g, '') : v;
+      }
     }
   });
   return params;
 }
 
 // 调用 fnOS 打开文件/目录（开放平台 SDK 页面路由能力，无 Scope 要求）
-async function openViaFn(method, path) {
+// 失败时错误可见，并提供"复制路径"兜底
+async function openViaFn(method, path, displayName) {
   try {
     const mod = await import('./vendor/trim-app.js');
     const sdk = new mod.TrimApp();
     await sdk.ready();
     if (sdk.isWeb && !sdk.isStandaloneWeb) {
       await sdk[method](path);
+      uiToast('已通过 fnOS 打开' + (displayName ? '：' + displayName : ''), 'success');
     } else {
-      throw new Error('standalone');
+      throw new Error('当前为独立浏览器环境（非桌面/应用中心），fnOS 无法直接打开');
     }
   } catch (e) {
-    alert('当前环境无法调用 fnOS 打开（需从桌面/应用中心打开本应用），可改用「下载」按钮获取文件');
+    console.error('[fnOS open]', method, path, e);
+    try {
+      await navigator.clipboard.writeText(path || '');
+      uiToast('fnOS 打开失败：' + (e && e.message ? e.message : e) + '，路径已复制到剪贴板', 'warn');
+    } catch (_) {
+      uiToast('fnOS 打开失败：' + (e && e.message ? e.message : e) + '（路径：' + path + '）', 'danger');
+    }
   }
 }
 
@@ -319,7 +417,7 @@ $('btn-browse').addEventListener('click', async () => {
       $('form-msg').textContent = '正在打开文件管理器…';
       await sdk.openAppAuth('pickUserFile', {
         ...params,
-        appName: 'n_m3u8dl_re',
+        appName: 'm3u8_down',
         redirectUri: location.origin + location.pathname,
       });
       return; // 页面将被跳转，回调由启动时的解析处理
@@ -394,7 +492,7 @@ async function retry(t) {
     params.name = t.name;
   }
   const data = await act(params);
-  if (!data.ok) alert(data.error || '重试失败');
+  if (!data.ok) uiToast(data.error || '重试失败');
   else await refreshTasks();
 }
 
@@ -428,17 +526,17 @@ async function loadFiles() {
         </div>
         <span class="file-meta">${fmtSize(f.size)} · ${fmtTime(f.mtime)}</span>
         <span class="file-actions">
-          <button class="btn btn-sm btn-outline-primary btn-fopen" data-path="${esc(f.path)}">打开</button>
+          <button class="btn btn-sm btn-outline-primary btn-fopen" data-path="${esc(f.realPath || f.path)}" data-name="${esc(f.name)}">打开</button>
           <a class="btn btn-sm btn-outline-secondary" href="${API({ action: 'download', path: f.path })}">下载</a>
           <button class="btn btn-sm btn-outline-danger btn-fdel" data-path="${esc(f.path)}">删除</button>
         </span>
       </div>`).join('');
     box.querySelectorAll('.btn-fopen').forEach((b) => {
-      b.addEventListener('click', () => openViaFn('openFile', b.dataset.path));
+      b.addEventListener('click', () => openViaFn('openFile', b.dataset.path, b.dataset.name));
     });
     box.querySelectorAll('.btn-fdel').forEach((b) => {
       b.addEventListener('click', async () => {
-        if (!confirm('确定删除文件「' + b.dataset.path + '」吗？')) return;
+        if (!(await uiConfirm('确定删除文件「' + b.dataset.path + '」吗？'))) return;
         await act({ action: 'delete_file', path: b.dataset.path });
         loadFiles();
       });
@@ -448,8 +546,45 @@ async function loadFiles() {
   }
 }
 
-// ---------- 启动：生成配置表单 + 轮询刷新 ----------
+// ---------- 应用访问路径弹窗 ----------
+$('btn-app-path').addEventListener('click', () => {
+  $('app-path-value').value = location.origin + location.pathname;
+  new bootstrap.Modal($('pathModal')).show();
+});
+$('btn-copy-path').addEventListener('click', async () => {
+  const v = $('app-path-value').value;
+  try {
+    await navigator.clipboard.writeText(v);
+    uiToast('已复制：' + v, 'success');
+  } catch (_) {
+    $('app-path-value').select();
+    document.execCommand('copy');
+    uiToast('已复制', 'success');
+  }
+});
+
+// ---------- 主题自动识别（默认暗黑；fnOS 宿主可用时跟随系统主题） ----------
+function applyTheme(theme) {
+  document.documentElement.dataset.bsTheme = theme === 'light' ? 'light' : 'dark';
+}
+async function initTheme() {
+  try {
+    const mod = await import('./vendor/trim-app.js');
+    const sdk = new mod.TrimApp();
+    await sdk.ready();
+    if (sdk.isWeb) {
+      try {
+        const cfg = await sdk.getPlatformConfig();
+        if (cfg && cfg.theme) applyTheme(cfg.theme);
+        sdk.$on('os/theme', (t) => applyTheme(t && t.theme ? t.theme : t));
+      } catch (_) { /* 保持默认暗黑 */ }
+    }
+  } catch (_) { /* SDK 不可用时保持默认暗黑 */ }
+}
+
+// ---------- 启动：生成配置表单 + 主题 + 轮询刷新 ----------
 buildCfgForm();
+initTheme();
 refreshTasks();
 setInterval(refreshTasks, POLL_MS);
 

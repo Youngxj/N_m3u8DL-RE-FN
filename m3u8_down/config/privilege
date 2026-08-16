@@ -1,0 +1,7 @@
+{
+  "defaults": {
+    "run-as": "package"
+  },
+  "username": "m3u8_down",
+  "groupname": "m3u8_down"
+}

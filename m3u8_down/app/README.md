@@ -43,10 +43,10 @@ app/
 fpk 顶层结构（由 build-fpk.mjs 生成）：
 
 ```text
-n_m3u8dl_re_<版本>_all.fpk   # gzip 压缩的 tar 归档
+m3u8_down_<版本>_all.fpk   # gzip 压缩的 tar 归档
 ├── app.tgz              # 上述 app/ 负载（checksum = 其 MD5）
 ├── manifest             # 应用元数据，含 checksum / fpk_version
-├── config/privilege     # run-as=package 专用用户 n_m3u8dl_re
+├── config/privilege     # run-as=package 专用用户 m3u8_down
 ├── config/resource      # data-share + usr-local-linker + api-scope
 ├── cmd/                 # 生命周期脚本
 ├── ui/                  # 桌面入口配置（CGI 入口 + 图标）
@@ -70,10 +70,10 @@ node build-fpk.mjs --version v0.6.0-beta --build 5 --note "说明"
 也可用官方 `fnpack`（正式发布推荐，会做格式校验）：
 
 ```bash
-fnpack build --directory n_m3u8dl_re
+fnpack build --directory m3u8_down
 ```
 
-输出：`dist/n_m3u8dl_re_<版本>_all.fpk`
+输出：`dist/m3u8_down_<版本>_all.fpk`
 
 ## 本地测试
 

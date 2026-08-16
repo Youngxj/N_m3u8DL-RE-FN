@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = "nilaoda/N_m3u8DL-RE";
-const PKG_DIR = path.join(__dirname, "n_m3u8dl_re");
+const PKG_DIR = path.join(__dirname, "m3u8_down");
 const CACHE_DIR = path.join(__dirname, ".cache");
 
 // 需要可执行权限位的文件（相对包根的路径）
@@ -267,7 +267,7 @@ async function main() {
   const fullVer = `${ver}.${buildNo}`;
   console.log(`[版本] 本次构建号 ${buildNo} → 完整版本 ${fullVer}`);
 
-  // 1. 下载并提取双架构二进制到 n_m3u8dl_re/app/bin/<arch>/
+  // 1. 下载并提取双架构二进制到 m3u8_down/app/bin/<arch>/
   const binDir = path.join(PKG_DIR, "app", "bin");
   for (const arch of ["x64", "arm64"]) {
     const asset = pickAsset(release.assets, arch);
@@ -308,12 +308,12 @@ async function main() {
   // 5. 打包 .fpk：顶层 = manifest + app.tgz + config/ + cmd/ + wizard/ + 图标 + 文档
   // 清理旧版本产物，避免混淆
   for (const old of fs.readdirSync(args.out)) {
-    if (/^n_m3u8dl_re_.*_all\.fpk$/.test(old)) {
+    if (/^m3u8_down_.*_all\.fpk$/.test(old)) {
       fs.rmSync(path.join(args.out, old), { force: true });
       console.log(`[清理] 移除旧产物 ${old}`);
     }
   }
-  const fpkName = `n_m3u8dl_re_${fullVer}_all.fpk`;
+  const fpkName = `m3u8_down_${fullVer}_all.fpk`;
   const fpkPath = path.join(args.out, fpkName);
   const fpkEntries = collectEntries(PKG_DIR)
     .filter((e) => !e.name.startsWith("app/")) // app/ 已打进 app.tgz

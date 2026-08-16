@@ -3,10 +3,10 @@
 *.cgi text eol=lf
 *.bash text eol=lf
 cmd/* text eol=lf
-n_m3u8dl_re/app/bin/N_m3u8DL-RE text eol=lf
-n_m3u8dl_re/app/bin/task-run.sh text eol=lf
-n_m3u8dl_re/app/ui/index.cgi text eol=lf
-n_m3u8dl_re/cmd/* text eol=lf
+m3u8_down/app/bin/N_m3u8DL-RE text eol=lf
+m3u8_down/app/bin/task-run.sh text eol=lf
+m3u8_down/app/ui/index.cgi text eol=lf
+m3u8_down/cmd/* text eol=lf
 
 # 其余文本文件统一 LF
 *.md text eol=lf

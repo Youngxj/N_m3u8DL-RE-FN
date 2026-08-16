@@ -40,6 +40,16 @@ body {
   color: var(--bs-secondary-color); max-width: 360px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* 头部图标按钮 */
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 9px;
+  border: 1px solid var(--bs-border-color);
+  background: var(--bs-tertiary-bg); color: var(--bs-secondary-color);
+  cursor: pointer; transition: all .15s; text-decoration: none;
+}
+.icon-btn:hover { color: var(--accent); border-color: var(--accent); }
+.req { font-size: 15px; line-height: 1; vertical-align: middle; }
 
 /* 主体 */
 .main-wrap { max-width: 1080px; padding-bottom: 60px; padding-top: 20px; }
@@ -50,10 +60,19 @@ body {
   padding: 10px 16px;
 }
 
-/* 配置表单：勾选行 + 字段网格 */
+/* 配置表单：分组 + 勾选行 + 字段网格 */
+.cfg-group { margin-bottom: 14px; }
+.cfg-group:last-child { margin-bottom: 0; }
+.cfg-group-title {
+  font-size: 12px; font-weight: 600; color: var(--accent);
+  margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+}
+.cfg-group-title::after {
+  content: ''; flex: 1; height: 1px; background: var(--bs-border-color);
+}
 .cfg-checks {
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px;
-  padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px dashed var(--bs-border-color);
+  padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px dashed var(--bs-border-color);
 }
 .cfg-check .form-check-input { cursor: pointer; }
 .cfg-check .form-check-label { font-size: 13px; cursor: pointer; }

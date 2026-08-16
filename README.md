@@ -19,7 +19,7 @@
 ## 目录
 
 ```text
-├── n_m3u8dl_re/          # fpk 应用包源码（app/ 打包为 app.tgz）
+├── m3u8_down/          # fpk 应用包源码（app/ 打包为 app.tgz）
 │   ├── manifest          # 应用元数据（含 checksum、micro_app、入口）
 │   ├── config/           # privilege / resource（data-share + usr-local-linker + api-scope）
 │   ├── cmd/              # 生命周期脚本
@@ -38,12 +38,12 @@
 ```bash
 node build-fpk.mjs                          # 最新 Release，版本自动递增（0.6.0-beta.N）
 node build-fpk.mjs --version v0.6.0-beta --build 5 --note "说明"
-# 正式发布可用官方 fnpack：fnpack build --directory n_m3u8dl_re
+# 正式发布可用官方 fnpack：fnpack build --directory m3u8_down
 ```
 
 ## 安装
 
-应用中心 → 手动安装 `dist/n_m3u8dl_re_<版本>_all.fpk` → 打开「m3u8下载器」卡片。
+应用中心 → 手动安装 `dist/m3u8_down_<版本>_all.fpk` → 打开「m3u8下载器」卡片。
 SSH 命令行：`N_m3u8DL-RE "https://..." --save-dir /vol1/...`。
 
 ## 免责声明

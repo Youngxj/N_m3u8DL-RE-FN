@@ -6,10 +6,10 @@
   "data-share": {
     "shares": [
       {
-        "name": "n_m3u8dl_re/downloads",
+        "name": "m3u8_down/downloads",
         "permission": {
           "rw": [
-            "n_m3u8dl_re"
+            "m3u8_down"
           ]
         }
       }

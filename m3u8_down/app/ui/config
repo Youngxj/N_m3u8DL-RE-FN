@@ -1,13 +1,13 @@
 {
   ".url": {
-    "n_m3u8dl_re.Application": {
+    "m3u8_down.Application": {
       "title": "m3u8下载器",
       "desc": "基于 N_m3u8DL-RE 的 DASH/HLS/MSS 流媒体下载工具",
       "icon": "images/icon_{0}.png",
       "type": "iframe",
       "protocol": "http",
       "port": "",
-      "url": "/cgi/ThirdParty/n_m3u8dl_re/index.cgi/",
+      "url": "/cgi/ThirdParty/m3u8_down/index.cgi/",
       "allUsers": true
     }
   }

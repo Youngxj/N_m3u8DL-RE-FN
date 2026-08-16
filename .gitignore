@@ -3,8 +3,8 @@
 dist/
 
 # 可再生的双架构二进制（由 build-fpk.mjs 自动下载）
-n_m3u8dl_re/app/bin/x64/
-n_m3u8dl_re/app/bin/arm64/
+m3u8_down/app/bin/x64/
+m3u8_down/app/bin/arm64/
 
 # Node
 node_modules/

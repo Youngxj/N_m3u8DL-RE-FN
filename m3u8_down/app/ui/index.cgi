@@ -16,8 +16,8 @@ exec 2>/dev/null
 #   - 不监听任何端口，无常驻进程（ctl_stop=false），完全贴合 fnOS 原生模型
 #
 # 调用示例：
-#   /cgi/ThirdParty/n_m3u8dl_re/index.cgi/                 → 页面
-#   /cgi/ThirdParty/n_m3u8dl_re/index.cgi/app.js           → 静态资源
+#   /cgi/ThirdParty/m3u8_down/index.cgi/                 → 页面
+#   /cgi/ThirdParty/m3u8_down/index.cgi/app.js           → 静态资源
 #   POST action=create&url=...&name=...&auto=1             → 新建任务
 #   GET  action=status                                     → 任务列表+进度
 #   GET  action=stop&id=...                                → 停止任务
@@ -214,6 +214,8 @@ task_json() {
   outDir="$(read_meta "$meta" outDir)"
   rawparams="$(read_meta "$meta" rawparams)"
   ofiles="$(read_meta "$meta" outputFiles)"
+  # 真实路径（解析符号链接，fnOS 打开文件/目录需要 /vol1/... 真实路径）
+  realOutDir="$(readlink -f "$outDir" 2>/dev/null || echo "$outDir")"
   opt_auto="$(read_meta "$meta" auto)"
   opt_subonly="$(read_meta "$meta" subonly)"
   opt_live="$(read_meta "$meta" live)"
@@ -319,7 +321,7 @@ task_json() {
     ofiles_json="$ofiles_json]"
   fi
 
-  printf '{"id":"%s","url":"%s","name":"%s","status":"%s","stage":"%s","progress":%s,"speed":"%s","segments":"%s","downloaded":"%s","total":"%s","eta":"%s","stream":"%s","exitCode":%s,"createdAt":"%s","outDir":"%s","outputFiles":%s,"options":%s,"rawparams":"%s","last":"%s"}' \
+  printf '{"id":"%s","url":"%s","name":"%s","status":"%s","stage":"%s","progress":%s,"speed":"%s","segments":"%s","downloaded":"%s","total":"%s","eta":"%s","stream":"%s","exitCode":%s,"createdAt":"%s","outDir":"%s","realOutDir":"%s","outputFiles":%s,"options":%s,"rawparams":"%s","last":"%s"}' \
     "$id" \
     "$(printf '%s' "$url" | json_escape)" \
     "$(printf '%s' "$name" | json_escape)" \
@@ -335,6 +337,7 @@ task_json() {
     "${exitCode:-null}" \
     "$(printf '%s' "$createdAt" | json_escape)" \
     "$(printf '%s' "$outDir" | json_escape)" \
+    "$(printf '%s' "$realOutDir" | json_escape)" \
     "$ofiles_json" \
     "$options_json" \
     "$(printf '%s' "$rawparams" | json_escape)" \
@@ -566,7 +569,7 @@ path_allowed() {
 }
 
 list_files() {
-  local first=1 meta id outdir names name f size mtime seen="|"
+  local first=1 meta id outdir names name f size mtime realpath seen="|"
   printf '{"ok":true,"dir":"%s","files":[' "$(printf '%s' "$SHARE_DIR" | json_escape)"
   if [ -d "$TASKS_DIR" ]; then
     for meta in "$TASKS_DIR"/*.meta; do
@@ -588,9 +591,11 @@ list_files() {
         first=0
         size="$(stat -c %s "$f" 2>/dev/null || stat -f %z "$f" 2>/dev/null || echo 0)"
         mtime="$(stat -c %y "$f" 2>/dev/null | cut -d. -f1)"
-        printf '{"name":"%s","path":"%s","size":%s,"mtime":"%s"}' \
+        realpath="$(readlink -f "$f" 2>/dev/null || echo "$f")"
+        printf '{"name":"%s","path":"%s","realPath":"%s","size":%s,"mtime":"%s"}' \
           "$(printf '%s' "$name" | json_escape)" \
           "$(printf '%s' "$f" | json_escape)" \
+          "$(printf '%s' "$realpath" | json_escape)" \
           "$size" \
           "$(printf '%s' "$mtime" | json_escape)"
       done
@@ -694,7 +699,7 @@ fi
 parse_params "$QUERY"
 RAW_ALL="${QUERY}${QUERY:+&}${BODY_RAW:-}"
 
-# 解析静态资源相对路径（如 /cgi/ThirdParty/n_m3u8dl_re/index.cgi/app.js）
+# 解析静态资源相对路径（如 /cgi/ThirdParty/m3u8_down/index.cgi/app.js）
 # 兼容不同 Web 服务器：优先 REQUEST_URI，其次 PATH_INFO，都没有则视为首页
 normalize_rel() {
   local p="$1"
