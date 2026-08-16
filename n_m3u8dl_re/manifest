@@ -1,6 +1,6 @@
 appname=n_m3u8dl_re
-version=0.6.0-beta.15
-fpk_version=0.6.0-beta.15
+version=0.6.0-beta.18
+fpk_version=0.6.0-beta.18
 display_name=m3u8下载器
 desc=m3u8下载器：基于开源项目 N_m3u8DL-RE（github.com/nilaoda/N_m3u8DL-RE，MIT License）封装的可视化 DASH/HLS/MSS 流媒体下载工具。支持点播与直播、多线程下载、音视频混流、字幕、解密、代理等完整命令行能力，全部参数均可视化配置；内置 x86_64 / arm64 双架构官方二进制，通过 Web 界面实时查看下载进度与文件管理。开发者：Youngxj（github.com/Youngxj/N_m3u8DL-RE-FN）
 source=thirdparty
@@ -14,6 +14,6 @@ desktop_applaunchname=n_m3u8dl_re.Application
 micro_app=true
 checkport=false
 disable_authorization_path=false
-changelog=构建 0.6.0-beta.15：基于 N_m3u8DL-RE v0.6.0-beta 官方 Release 打包；内置 linux-x64 / linux-arm64 双架构二进制。 更名 m3u8下载器；全部参数可视化（基本/高级）；实时进度修复；品牌与开发者信息；README 完善
+changelog=构建 0.6.0-beta.18：基于 N_m3u8DL-RE v0.6.0-beta 官方 Release 打包；内置 linux-x64 / linux-arm64 双架构二进制。 前端重构为 Bootstrap 5（暗色主题、离线自包含）：表单/标签页/折叠/按钮/进度条全面组件化
 
-checksum=82bab62965ee37fc4ae8a03a1a335593
+checksum=b46ef39cd4bb21c440d6931ec6915279

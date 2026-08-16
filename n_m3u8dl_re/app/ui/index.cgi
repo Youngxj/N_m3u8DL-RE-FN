@@ -213,6 +213,7 @@ task_json() {
   exitCode="$(read_meta "$meta" exitCode)"
   outDir="$(read_meta "$meta" outDir)"
   rawparams="$(read_meta "$meta" rawparams)"
+  ofiles="$(read_meta "$meta" outputFiles)"
   opt_auto="$(read_meta "$meta" auto)"
   opt_subonly="$(read_meta "$meta" subonly)"
   opt_live="$(read_meta "$meta" live)"
@@ -303,7 +304,22 @@ task_json() {
     speed="$(printf '%s' "$speed" | sed 's/^\([0-9.]*\) *\([KMGT]\)Bps$/\1 \2B\/s/; s/^\([0-9.]*\) *Bps$/\1 B\/s/')"
   fi
 
-  printf '{"id":"%s","url":"%s","name":"%s","status":"%s","stage":"%s","progress":%s,"speed":"%s","segments":"%s","downloaded":"%s","total":"%s","eta":"%s","stream":"%s","exitCode":%s,"createdAt":"%s","outDir":"%s","options":%s,"rawparams":"%s","last":"%s"}' \
+  # outputFiles 转 JSON 数组（供界面"打开文件"按钮使用）
+  local ofiles_json='[]'
+  if [ -n "$ofiles" ]; then
+    local of first_of=1 ofarr
+    ofiles_json='['
+    IFS=',' read -ra ofarr <<< "$ofiles"
+    for of in "${ofarr[@]}"; do
+      [ -n "$of" ] || continue
+      [ "$first_of" -eq 1 ] || ofiles_json="$ofiles_json,"
+      first_of=0
+      ofiles_json="$ofiles_json\"$(printf '%s' "$of" | json_escape)\""
+    done
+    ofiles_json="$ofiles_json]"
+  fi
+
+  printf '{"id":"%s","url":"%s","name":"%s","status":"%s","stage":"%s","progress":%s,"speed":"%s","segments":"%s","downloaded":"%s","total":"%s","eta":"%s","stream":"%s","exitCode":%s,"createdAt":"%s","outDir":"%s","outputFiles":%s,"options":%s,"rawparams":"%s","last":"%s"}' \
     "$id" \
     "$(printf '%s' "$url" | json_escape)" \
     "$(printf '%s' "$name" | json_escape)" \
@@ -319,6 +335,7 @@ task_json() {
     "${exitCode:-null}" \
     "$(printf '%s' "$createdAt" | json_escape)" \
     "$(printf '%s' "$outDir" | json_escape)" \
+    "$ofiles_json" \
     "$options_json" \
     "$(printf '%s' "$rawparams" | json_escape)" \
     "$(printf '%s' "$lastline" | json_escape)"

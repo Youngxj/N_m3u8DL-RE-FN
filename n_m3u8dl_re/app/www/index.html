@@ -1,104 +1,121 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-bs-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>m3u8下载器</title>
-  <link rel="stylesheet" href="style.css?v=5" />
+  <link rel="stylesheet" href="vendor/bootstrap.min.css?v=1" />
+  <link rel="stylesheet" href="style.css?v=8" />
 </head>
 <body>
-  <header class="topbar">
+  <!-- 顶栏 -->
+  <header class="topbar border-bottom">
     <div class="brand">
       <span class="logo">⬇</span>
-      <div>
-        <h1>m3u8下载器</h1>
-        <p class="sub">基于 N_m3u8DL-RE · DASH / HLS / MSS 流媒体下载 · fnOS</p>
+      <div class="brand-text">
+        <h1 class="mb-0">m3u8下载器</h1>
+        <p class="sub mb-0">基于 N_m3u8DL-RE · DASH / HLS / MSS 流媒体下载 · fnOS</p>
       </div>
     </div>
-    <div class="service-info">
-      <span id="svc-dir" class="pill dir-pill" title="默认输出目录">加载中…</span>
+    <div class="d-flex gap-2 flex-wrap">
+      <span id="svc-dir" class="pill" title="默认输出目录">加载中…</span>
     </div>
   </header>
 
-  <main>
+  <main class="container main-wrap">
     <!-- 新建任务 -->
-    <section class="card form-card">
-      <h2>新建下载任务</h2>
-      <form id="task-form">
-        <div class="row">
-          <label class="grow">
-            <span>流媒体链接 / 文件</span>
-            <input type="url" id="f-url" placeholder="https://example.com/path/index.m3u8" required />
-          </label>
-          <label>
-            <span>保存名称（可选）</span>
-            <input type="text" id="f-name" placeholder="自动命名" />
-          </label>
-        </div>
-        <div class="row">
-          <label class="grow">
-            <span>输出目录</span>
-            <select id="f-dir">
-              <option value="default">默认共享目录（文件管理器中可见）</option>
-              <option value="custom">自定义目录（浏览选择 / 手动输入）</option>
-            </select>
-          </label>
-          <label class="grow custom-dir hidden">
-            <span>自定义目录路径</span>
-            <div class="dir-input-row">
-              <input type="text" id="f-custom-dir" placeholder="/vol1/Users/admin/Downloads" />
-              <button type="button" class="btn sm" id="btn-browse">浏览…</button>
+    <section class="card app-card">
+      <div class="card-header fw-semibold">新建下载任务</div>
+      <div class="card-body">
+        <form id="task-form">
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-lg-8">
+              <label class="form-label" for="f-url">流媒体链接 / 文件</label>
+              <input type="url" class="form-control" id="f-url" placeholder="https://example.com/path/index.m3u8" required />
             </div>
-          </label>
-        </div>
+            <div class="col-12 col-lg-4">
+              <label class="form-label" for="f-name">保存名称（可选）</label>
+              <input type="text" class="form-control" id="f-name" placeholder="自动命名" />
+            </div>
+          </div>
 
-        <div class="cfg-section">
-          <button type="button" class="cfg-toggle" data-target="cfg-basic">
-            <span class="cfg-caret">▸</span> 基本配置
-          </button>
-          <div id="cfg-basic" class="cfg-body open"></div>
-        </div>
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-lg-5">
+              <label class="form-label" for="f-dir">输出目录</label>
+              <select class="form-select" id="f-dir">
+                <option value="default">默认共享目录（文件管理器中可见）</option>
+                <option value="custom">自定义目录（浏览选择 / 手动输入）</option>
+              </select>
+            </div>
+            <div class="col-12 col-lg-7 custom-dir d-none">
+              <label class="form-label" for="f-custom-dir">自定义目录路径</label>
+              <div class="input-group">
+                <input type="text" class="form-control" id="f-custom-dir" placeholder="/vol1/Users/admin/Downloads" />
+                <button type="button" class="btn btn-outline-primary" id="btn-browse">浏览…</button>
+              </div>
+            </div>
+          </div>
 
-        <div class="cfg-section">
-          <button type="button" class="cfg-toggle" data-target="cfg-advanced">
-            <span class="cfg-caret">▸</span> 高级配置
-          </button>
-          <div id="cfg-advanced" class="cfg-body"></div>
-        </div>
+          <div class="accordion mb-3" id="cfg-accordion">
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#cfg-basic" aria-expanded="true">
+                  基本配置
+                </button>
+              </h2>
+              <div id="cfg-basic" class="accordion-collapse collapse show" data-bs-parent="#cfg-accordion">
+                <div class="accordion-body"></div>
+              </div>
+            </div>
+            <div class="accordion-item">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#cfg-advanced" aria-expanded="false">
+                  高级配置
+                </button>
+              </h2>
+              <div id="cfg-advanced" class="accordion-collapse collapse" data-bs-parent="#cfg-accordion">
+                <div class="accordion-body"></div>
+              </div>
+            </div>
+          </div>
 
-        <div class="actions">
-          <button type="submit" class="btn primary" id="btn-submit">开始下载</button>
-          <span id="form-msg" class="form-msg"></span>
-        </div>
-      </form>
+          <div class="d-flex align-items-center gap-3 flex-wrap">
+            <button type="submit" class="btn btn-primary px-4" id="btn-submit">开始下载</button>
+            <span id="form-msg" class="text-danger small"></span>
+          </div>
+        </form>
+      </div>
     </section>
 
-    <!-- 任务列表 -->
-    <section class="card">
-      <div class="card-head">
-        <h2>下载任务</h2>
-        <div class="tabs">
-          <button class="tab active" data-tab="tasks">任务 <span id="task-count" class="count">0</span></button>
-          <button class="tab" data-tab="files">已下载文件</button>
-        </div>
+    <!-- 任务 / 文件 -->
+    <section class="card app-card">
+      <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="fw-semibold">下载任务</span>
+        <ul class="nav nav-tabs card-header-tabs mb-0">
+          <li class="nav-item">
+            <button class="nav-link active" data-tab="tasks" type="button">任务 <span id="task-count" class="badge text-bg-primary ms-1">0</span></button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" data-tab="files" type="button">已下载文件</button>
+          </li>
+        </ul>
       </div>
-      <div id="tab-tasks">
-        <div id="task-list" class="task-list">
-          <p class="empty">加载中…</p>
+      <div class="card-body">
+        <div id="tab-tasks">
+          <div id="task-list" class="task-list"></div>
         </div>
-      </div>
-      <div id="tab-files" class="hidden">
-        <div id="file-list" class="file-list">
-          <p class="empty">点击「已下载文件」标签查看</p>
+        <div id="tab-files" class="d-none">
+          <div id="file-list" class="file-list"></div>
         </div>
       </div>
     </section>
   </main>
 
-  <footer class="foot">
-    <span>m3u8下载器 · 引擎：<a href="https://github.com/nilaoda/N_m3u8DL-RE" target="_blank" rel="noopener">N_m3u8DL-RE</a>（MIT）· 开发者 <a href="https://github.com/Youngxj" target="_blank" rel="noopener">Youngxj</a> · 项目主页：<a href="https://github.com/Youngxj/N_m3u8DL-RE-FN" target="_blank" rel="noopener">N_m3u8DL-RE-FN</a></span>
+  <footer class="foot text-center text-secondary small py-3 px-3">
+    m3u8下载器 · 引擎：<a href="https://github.com/nilaoda/N_m3u8DL-RE" target="_blank" rel="noopener">N_m3u8DL-RE</a>（MIT）· 开发者 <a href="https://github.com/Youngxj" target="_blank" rel="noopener">Youngxj</a> · 项目主页：<a href="https://github.com/Youngxj/N_m3u8DL-RE-FN" target="_blank" rel="noopener">N_m3u8DL-RE-FN</a>
   </footer>
 
-  <script src="app.js?v=4"></script>
+  <script src="vendor/bootstrap.bundle.min.js?v=1"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>
