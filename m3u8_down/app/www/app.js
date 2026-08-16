@@ -60,7 +60,7 @@ function fmtTime(iso) {
 let tasks = [];
 let dir = '';
 
-// ---------- 任务渲染 ----------
+// ---------- 任务渲染（仅更新变化部分，避免 300ms 全量重绘导致按钮 hover 闪烁） ----------
 function renderTasks() {
   const list = $('task-list');
   $('task-count').textContent = tasks.length;
@@ -68,55 +68,93 @@ function renderTasks() {
     list.innerHTML = '<p class="empty">暂无任务，在上方创建第一个下载任务吧。</p>';
     return;
   }
-  list.innerHTML = tasks.map(taskCard).join('');
+  const existing = new Set();
   tasks.forEach((t) => {
-    const card = $('task-' + t.id);
-    if (!card) return;
-    card.querySelector('.btn-stop')?.addEventListener('click', () => act({ action: 'stop', id: t.id }));
-    card.querySelector('.btn-retry')?.addEventListener('click', () => retry(t));
-    card.querySelector('.btn-del')?.addEventListener('click', async () => {
-      if (await uiConfirm('确定删除任务「' + t.name + '」的记录吗？（不会删除已下载文件）')) act({ action: 'remove', id: t.id });
-    });
-    wireOpenButtons(card, t);
+    existing.add(t.id);
+    let card = $('task-' + t.id);
+    if (!card) {
+      // 新任务：创建卡片并绑定事件
+      list.insertAdjacentHTML('beforeend', taskCard(t));
+      card = $('task-' + t.id);
+      wireTaskEvents(card, t);
+    }
+    updateTaskCard(card, t);
+  });
+  // 移除已不存在的卡片
+  list.querySelectorAll('.task').forEach((card) => {
+    if (!existing.has(card.id.replace(/^task-/, ''))) card.remove();
   });
 }
 
-function taskCard(t) {
-  const pct = t.status === 'success' ? 100 : Math.min(100, Math.max(0, Math.round(t.progress || 0)));
-  const showStop = t.status === 'running' || t.status === 'queued';
-  const showRetry = ['failed', 'stopped'].includes(t.status);
-  const showDel = ['success', 'failed', 'stopped'].includes(t.status);
+function wireTaskEvents(card, t) {
+  card.querySelector('.btn-stop')?.addEventListener('click', () => act({ action: 'stop', id: t.id }));
+  card.querySelector('.btn-retry')?.addEventListener('click', () => retry(t));
+  card.querySelector('.btn-del')?.addEventListener('click', async () => {
+    if (await uiConfirm('确定删除任务「' + t.name + '」的记录吗？（不会删除已下载文件）')) act({ action: 'remove', id: t.id });
+  });
+  wireOpenButtons(card, t);
+}
+
+function taskBadge(t) {
+  return t.status === 'running' ? (t.stage || '处理中') : (STATUS_TEXT[t.status] || t.status);
+}
+function taskBadgeCls(t) {
+  return t.status === 'running' ? 'bg-running' : t.status === 'success' ? 'bg-success'
+    : t.status === 'failed' ? 'bg-failed' : (t.status === 'stopped' || t.status === 'stopping') ? 'bg-stopped' : 'bg-queued';
+}
+function taskDesc(t, pct) {
+  const STREAM_TEXT = { Vid: '视频', Aud: '音频', Sub: '字幕' };
+  const parts = [];
+  if (t.status === 'running') {
+    if (t.stream) parts.push(STREAM_TEXT[t.stream] || t.stream);
+    if (t.segments) parts.push(`分片 ${t.segments}`);
+    if (pct > 0) parts.push(`已完成 ${pct}%`);
+    if (t.downloaded && t.total) parts.push(`${t.downloaded}/${t.total}`);
+    if (t.speed) parts.push(`速度 ${t.speed}`);
+    if (t.eta) parts.push(`剩余 ${t.eta}`);
+  } else if (t.status === 'success') {
+    parts.push('下载完成');
+    if (t.segments) parts.push(`共 ${t.segments.split('/').pop()} 分片`);
+  } else if (t.status === 'failed' || t.status === 'stopped') {
+    parts.push(t.last || STATUS_TEXT[t.status] || t.status);
+  }
+  return parts.join(' · ') || '准备中…';
+}
+function taskStatsHtml(t) {
   const stats = [];
   if (t.segments) stats.push(`分片 <b>${t.segments}</b>`);
   if (t.createdAt) stats.push(`创建 ${fmtTime(t.createdAt)}`);
   if (t.exitCode != null) stats.push(`退出码 <b>${t.exitCode}</b>`);
+  return stats.join('<span>·</span>') || '<span>等待开始</span>';
+}
 
-  // 状态徽章：运行中只显示阶段（避免"下载中·下载中"重复）
-  const badge = t.status === 'running'
-    ? (t.stage || '处理中')
-    : (STATUS_TEXT[t.status] || t.status);
-  const badgeCls = t.status === 'running' ? 'bg-running' : t.status === 'success' ? 'bg-success'
-    : t.status === 'failed' ? 'bg-failed' : (t.status === 'stopped' || t.status === 'stopping') ? 'bg-stopped' : 'bg-queued';
+// 增量更新卡片动态部分（不重建 DOM）
+function updateTaskCard(card, t) {
+  const pct = t.status === 'success' ? 100 : Math.min(100, Math.max(0, Math.round(t.progress || 0)));
+  const badgeEl = card.querySelector('.badge');
+  badgeEl.textContent = taskBadge(t);
+  badgeEl.className = 'badge ' + taskBadgeCls(t);
+  const bar = card.querySelector('.progress-bar');
+  bar.style.width = pct + '%';
+  bar.classList.toggle('bg-ok', t.status === 'success');
+  card.querySelector('.progress-pct').textContent = pct + '%';
+  card.querySelector('.task-stats').innerHTML = taskStatsHtml(t);
+  const lastEl = card.querySelector('.task-last');
+  lastEl.textContent = taskDesc(t, pct);
+  lastEl.title = t.last || '';
+  const showStop = t.status === 'running' || t.status === 'queued';
+  const showRetry = ['failed', 'stopped'].includes(t.status);
+  const showDel = ['success', 'failed', 'stopped'].includes(t.status);
+  const showOpen = t.status === 'success' && t.outDir;
+  card.querySelector('.btn-stop')?.classList.toggle('d-none', !showStop);
+  card.querySelector('.btn-retry')?.classList.toggle('d-none', !showRetry);
+  card.querySelector('.btn-del')?.classList.toggle('d-none', !showDel);
+  card.querySelector('.btn-open-file')?.classList.toggle('d-none', !(showOpen && t.outputFiles && t.outputFiles.length === 1));
+  card.querySelector('.btn-open-dir')?.classList.toggle('d-none', !showOpen);
+}
 
-  // 进度描述：由解析出的字段合成，清晰且无杂乱日志
-  const STREAM_TEXT = { Vid: '视频', Aud: '音频', Sub: '字幕' };
-  const descParts = [];
-  if (t.status === 'running') {
-    if (t.stream) descParts.push(STREAM_TEXT[t.stream] || t.stream);
-    if (t.segments) descParts.push(`分片 ${t.segments}`);
-    if (pct > 0) descParts.push(`已完成 ${pct}%`);
-    if (t.downloaded && t.total) descParts.push(`${t.downloaded}/${t.total}`);
-    if (t.speed) descParts.push(`速度 ${t.speed}`);
-    if (t.eta) descParts.push(`剩余 ${t.eta}`);
-  } else if (t.status === 'success') {
-    descParts.push('下载完成');
-    if (t.segments) descParts.push(`共 ${t.segments.split('/').pop()} 分片`);
-  } else if (t.status === 'failed' || t.status === 'stopped') {
-    descParts.push(t.last || STATUS_TEXT[t.status] || t.status);
-  }
-  const desc = descParts.join(' · ') || '准备中…';
-  const lastRaw = t.last || '';
-
+function taskCard(t) {
+  const pct = t.status === 'success' ? 100 : Math.min(100, Math.max(0, Math.round(t.progress || 0)));
   return `
   <div class="task" id="task-${t.id}">
     <div class="task-head">
@@ -125,7 +163,7 @@ function taskCard(t) {
         <div class="task-url">${esc(t.url)}</div>
       </div>
       <div class="task-meta">
-        <span class="badge ${badgeCls}">${esc(badge)}</span>
+        <span class="badge ${taskBadgeCls(t)}">${esc(taskBadge(t))}</span>
       </div>
     </div>
     <div class="progress-wrap">
@@ -134,15 +172,14 @@ function taskCard(t) {
       </div>
       <span class="progress-pct">${pct}%</span>
     </div>
-    <div class="task-stats">${stats.join('<span>·</span>') || '<span>等待开始</span>'}</div>
-    <div class="task-last" title="${esc(lastRaw)}">${esc(desc)}</div>
+    <div class="task-stats">${taskStatsHtml(t)}</div>
+    <div class="task-last" title="${esc(t.last || '')}">${esc(taskDesc(t, pct))}</div>
     <div class="task-actions">
-      ${showStop ? `<button class="btn btn-sm btn-outline-danger btn-stop">停止</button>` : ''}
-      ${showRetry ? `<button class="btn btn-sm btn-outline-secondary btn-retry">重试</button>` : ''}
-      ${showDel ? `<button class="btn btn-sm btn-outline-secondary btn-del">删除记录</button>` : ''}
-      ${t.status === 'success' && t.outDir ? `
-        ${t.outputFiles && t.outputFiles.length === 1 ? `<button class="btn btn-sm btn-outline-primary btn-open-file">打开文件</button>` : ''}
-        <button class="btn btn-sm btn-outline-primary btn-open-dir">打开目录</button>` : ''}
+      <button class="btn btn-sm btn-outline-danger btn-stop${(t.status === 'running' || t.status === 'queued') ? '' : ' d-none'}">停止</button>
+      <button class="btn btn-sm btn-outline-secondary btn-retry${['failed', 'stopped'].includes(t.status) ? '' : ' d-none'}">重试</button>
+      <button class="btn btn-sm btn-outline-secondary btn-del${['success', 'failed', 'stopped'].includes(t.status) ? '' : ' d-none'}">删除记录</button>
+      <button class="btn btn-sm btn-outline-primary btn-open-file${t.status === 'success' && t.outDir && t.outputFiles && t.outputFiles.length === 1 ? '' : ' d-none'}">打开文件</button>
+      <button class="btn btn-sm btn-outline-primary btn-open-dir${t.status === 'success' && t.outDir ? '' : ' d-none'}">打开目录</button>
     </div>
   </div>`;
 }
