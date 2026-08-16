@@ -1,0 +1,16 @@
+#!/bin/bash
+# N_m3u8DL-RE fnOS 应用生命周期脚本 - install_init
+# 安装应用文件前执行：检查目标设备架构是否受支持。
+# 可重复执行（幂等）。
+
+ARCH="$(uname -m 2>/dev/null)"
+case "$ARCH" in
+  x86_64|amd64|aarch64|arm64|armv7l|armv8l|arm)
+    # 支持 x86_64 与 aarch64，其余 ARM 变体由 wrapper 二次校验。
+    exit 0
+    ;;
+  *)
+    echo "不支持的 CPU 架构: ${ARCH:-unknown}，本应用仅支持 x86_64 / aarch64。" > "$TRIM_TEMP_LOGFILE"
+    exit 1
+    ;;
+esac

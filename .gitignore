@@ -1,0 +1,18 @@
+# 构建缓存与产物
+.cache/
+dist/
+
+# 可再生的双架构二进制（由 build-fpk.mjs 自动下载）
+n_m3u8dl_re/app/bin/x64/
+n_m3u8dl_re/app/bin/arm64/
+
+# Node
+node_modules/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 本地测试产物
+test/downloads/
+test/var/

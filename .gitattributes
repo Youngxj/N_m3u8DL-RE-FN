@@ -1,0 +1,18 @@
+# 脚本类文件强制 LF 行尾（避免 Windows 检出时 CRLF 破坏 bash 脚本）
+*.sh text eol=lf
+*.cgi text eol=lf
+*.bash text eol=lf
+cmd/* text eol=lf
+n_m3u8dl_re/app/bin/N_m3u8DL-RE text eol=lf
+n_m3u8dl_re/app/bin/task-run.sh text eol=lf
+n_m3u8dl_re/app/ui/index.cgi text eol=lf
+n_m3u8dl_re/cmd/* text eol=lf
+
+# 其余文本文件统一 LF
+*.md text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+manifest text eol=lf

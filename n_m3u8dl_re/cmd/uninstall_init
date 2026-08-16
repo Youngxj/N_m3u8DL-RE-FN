@@ -1,0 +1,5 @@
+#!/bin/bash
+# N_m3u8DL-RE fnOS 应用生命周期脚本 - uninstall_init
+# 卸载前执行：不删除任何用户数据（下载文件、共享目录由系统按向导选择处理）。
+
+exit 0

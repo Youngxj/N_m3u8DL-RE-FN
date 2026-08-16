@@ -1,0 +1,23 @@
+#!/bin/bash
+# N_m3u8DL-RE fnOS 应用生命周期脚本 - main
+# 本应用为 index.cgi 模型：无后台常驻服务（ctl_stop 未声明时应用中心显示启停控制）。
+# 应用始终可用（status 返回 0），保证"打开"入口正常。
+
+case "$1" in
+  start)
+    # 无后台服务需要启动。
+    exit 0
+    ;;
+  stop)
+    # 无后台服务需要停止。
+    exit 0
+    ;;
+  status)
+    # 无状态 CGI 应用：始终视为可用。
+    exit 0
+    ;;
+  *)
+    echo "Unknown command: $1" > "$TRIM_TEMP_LOGFILE"
+    exit 1
+    ;;
+esac

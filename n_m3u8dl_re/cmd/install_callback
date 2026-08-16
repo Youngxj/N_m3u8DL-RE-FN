@@ -1,0 +1,27 @@
+#!/bin/bash
+# N_m3u8DL-RE fnOS 应用生命周期脚本 - install_callback
+# 安装文件应用后执行：设置可执行权限。
+# 幂等；fnOS 的 cmd/* 与 CGI 入口依赖 +x。
+
+BIN_ROOT="$TRIM_APPDEST/bin"
+
+chmod 755 "$BIN_ROOT/N_m3u8DL-RE" 2>/dev/null || true
+chmod 755 "$BIN_ROOT/x64/N_m3u8DL-RE" 2>/dev/null || true
+chmod 755 "$BIN_ROOT/arm64/N_m3u8DL-RE" 2>/dev/null || true
+chmod 755 "$BIN_ROOT/task-run.sh" 2>/dev/null || true
+chmod 755 "$TRIM_APPDEST/ui/index.cgi" 2>/dev/null || true
+
+# 校验当前架构对应的二进制确实存在
+ARCH="$(uname -m 2>/dev/null)"
+case "$ARCH" in
+  x86_64|amd64) EXPECTED="$BIN_ROOT/x64/N_m3u8DL-RE" ;;
+  aarch64|arm64) EXPECTED="$BIN_ROOT/arm64/N_m3u8DL-RE" ;;
+  *) EXPECTED="" ;;
+esac
+
+if [ -n "$EXPECTED" ] && [ ! -f "$EXPECTED" ]; then
+  echo "缺少当前架构 ($ARCH) 的 N_m3u8DL-RE 二进制: $EXPECTED" > "$TRIM_TEMP_LOGFILE"
+  exit 1
+fi
+
+exit 0

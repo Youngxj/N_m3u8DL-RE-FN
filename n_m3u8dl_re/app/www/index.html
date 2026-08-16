@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>m3u8下载器</title>
+  <link rel="stylesheet" href="style.css?v=5" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">⬇</span>
+      <div>
+        <h1>m3u8下载器</h1>
+        <p class="sub">基于 N_m3u8DL-RE · DASH / HLS / MSS 流媒体下载 · fnOS</p>
+      </div>
+    </div>
+    <div class="service-info">
+      <span id="svc-dir" class="pill dir-pill" title="默认输出目录">加载中…</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- 新建任务 -->
+    <section class="card form-card">
+      <h2>新建下载任务</h2>
+      <form id="task-form">
+        <div class="row">
+          <label class="grow">
+            <span>流媒体链接 / 文件</span>
+            <input type="url" id="f-url" placeholder="https://example.com/path/index.m3u8" required />
+          </label>
+          <label>
+            <span>保存名称（可选）</span>
+            <input type="text" id="f-name" placeholder="自动命名" />
+          </label>
+        </div>
+        <div class="row">
+          <label class="grow">
+            <span>输出目录</span>
+            <select id="f-dir">
+              <option value="default">默认共享目录（文件管理器中可见）</option>
+              <option value="custom">自定义目录（浏览选择 / 手动输入）</option>
+            </select>
+          </label>
+          <label class="grow custom-dir hidden">
+            <span>自定义目录路径</span>
+            <div class="dir-input-row">
+              <input type="text" id="f-custom-dir" placeholder="/vol1/Users/admin/Downloads" />
+              <button type="button" class="btn sm" id="btn-browse">浏览…</button>
+            </div>
+          </label>
+        </div>
+
+        <div class="cfg-section">
+          <button type="button" class="cfg-toggle" data-target="cfg-basic">
+            <span class="cfg-caret">▸</span> 基本配置
+          </button>
+          <div id="cfg-basic" class="cfg-body open"></div>
+        </div>
+
+        <div class="cfg-section">
+          <button type="button" class="cfg-toggle" data-target="cfg-advanced">
+            <span class="cfg-caret">▸</span> 高级配置
+          </button>
+          <div id="cfg-advanced" class="cfg-body"></div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn primary" id="btn-submit">开始下载</button>
+          <span id="form-msg" class="form-msg"></span>
+        </div>
+      </form>
+    </section>
+
+    <!-- 任务列表 -->
+    <section class="card">
+      <div class="card-head">
+        <h2>下载任务</h2>
+        <div class="tabs">
+          <button class="tab active" data-tab="tasks">任务 <span id="task-count" class="count">0</span></button>
+          <button class="tab" data-tab="files">已下载文件</button>
+        </div>
+      </div>
+      <div id="tab-tasks">
+        <div id="task-list" class="task-list">
+          <p class="empty">加载中…</p>
+        </div>
+      </div>
+      <div id="tab-files" class="hidden">
+        <div id="file-list" class="file-list">
+          <p class="empty">点击「已下载文件」标签查看</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>m3u8下载器 · 引擎：<a href="https://github.com/nilaoda/N_m3u8DL-RE" target="_blank" rel="noopener">N_m3u8DL-RE</a>（MIT）· 开发者 <a href="https://github.com/Youngxj" target="_blank" rel="noopener">Youngxj</a> · 项目主页：<a href="https://github.com/Youngxj/N_m3u8DL-RE-FN" target="_blank" rel="noopener">N_m3u8DL-RE-FN</a></span>
+  </footer>
+
+  <script src="app.js?v=4"></script>
+</body>
+</html>

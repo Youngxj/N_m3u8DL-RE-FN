@@ -1,0 +1,11 @@
+#!/bin/bash
+# N_m3u8DL-RE fnOS 应用生命周期脚本 - upgrade_callback
+# 升级后执行：重新设置可执行权限（与 install_callback 相同，幂等）。
+
+BIN_ROOT="$TRIM_APPDEST/bin"
+
+chmod 755 "$BIN_ROOT/N_m3u8DL-RE" 2>/dev/null || true
+chmod 755 "$BIN_ROOT/x64/N_m3u8DL-RE" 2>/dev/null || true
+chmod 755 "$BIN_ROOT/arm64/N_m3u8DL-RE" 2>/dev/null || true
+
+exit 0

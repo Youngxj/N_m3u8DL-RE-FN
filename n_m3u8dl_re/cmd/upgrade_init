@@ -1,0 +1,5 @@
+#!/bin/bash
+# N_m3u8DL-RE fnOS 应用生命周期脚本 - upgrade_init
+# 升级前执行：无需迁移，直接通过。
+
+exit 0

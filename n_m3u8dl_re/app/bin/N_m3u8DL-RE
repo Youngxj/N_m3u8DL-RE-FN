@@ -1,0 +1,44 @@
+#!/bin/bash
+# N_m3u8DL-RE fnOS 启动脚本（wrapper）
+#
+# 安装后 /usr/local/bin/N_m3u8DL-RE 会链接到本脚本。
+# 本脚本根据设备 CPU 架构选择对应的原生二进制并透传所有参数，
+# 因此同一个 fpk 可同时适配 x86_64 与 aarch64 设备。
+#
+# 调用方式与 N_m3u8DL-RE 官方 README 完全一致：
+#   N_m3u8DL-RE <input> [options]
+# 示例：
+#   N_m3u8DL-RE "https://example.com/index.m3u8" --save-dir /vol1/Downloads
+#
+# 详细参数说明见包内 USAGE.md 或官方 README：
+#   https://github.com/nilaoda/N_m3u8DL-RE
+
+# 解析本脚本真实路径（兼容 /usr/local/bin 下的符号链接）
+SELF="$0"
+if command -v readlink >/dev/null 2>&1; then
+  SELF="$(readlink -f "$SELF" 2>/dev/null || echo "$SELF")"
+fi
+BIN_DIR="$(cd "$(dirname "$SELF")" && pwd)"
+
+# 选择架构子目录
+case "$(uname -m)" in
+  x86_64|amd64) ARCH="x64" ;;
+  aarch64|arm64) ARCH="arm64" ;;
+  *)
+    echo "N_m3u8DL-RE: 不支持的 CPU 架构: $(uname -m)（仅支持 x86_64 / aarch64）" >&2
+    exit 1
+    ;;
+esac
+
+BIN="$BIN_DIR/$ARCH/N_m3u8DL-RE"
+if [ ! -x "$BIN" ]; then
+  echo "N_m3u8DL-RE: 未找到可执行文件: $BIN" >&2
+  exit 1
+fi
+
+# 生命周期脚本环境下使用系统分配的临时目录
+if [ -n "$TRIM_PKGTMP" ] && [ -d "$TRIM_PKGTMP" ]; then
+  export TMPDIR="$TRIM_PKGTMP"
+fi
+
+exec "$BIN" "$@"

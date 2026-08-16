@@ -1,0 +1,5 @@
+#!/bin/bash
+# N_m3u8DL-RE fnOS 应用生命周期脚本 - uninstall_callback
+# 卸载清理后执行：应用目录之外不主动删除任何数据。
+
+exit 0

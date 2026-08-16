@@ -1,0 +1,5 @@
+#!/bin/bash
+# N_m3u8DL-RE fnOS 应用生命周期脚本 - config_callback
+# 配置变更应用后执行：本应用无运行期配置，直接通过。
+
+exit 0

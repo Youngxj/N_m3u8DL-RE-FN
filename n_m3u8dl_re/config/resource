@@ -1,0 +1,23 @@
+{
+  "api-scope": [
+    "trim.file.userAccess",
+    "trim.file.sharedAccess"
+  ],
+  "data-share": {
+    "shares": [
+      {
+        "name": "n_m3u8dl_re/downloads",
+        "permission": {
+          "rw": [
+            "n_m3u8dl_re"
+          ]
+        }
+      }
+    ]
+  },
+  "usr-local-linker": {
+    "bin": [
+      "bin/N_m3u8DL-RE"
+    ]
+  }
+}
