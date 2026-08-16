@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>m3u8下载器</title>
   <link rel="stylesheet" href="vendor/bootstrap.min.css?v=1" />
-  <link rel="stylesheet" href="style.css?v=13" />
+  <link rel="stylesheet" href="style.css?v=14" />
 </head>
 <body>
   <!-- 顶栏 -->
@@ -118,10 +118,22 @@
         </div>
       </div>
     </section>
+    <!-- 应用与引擎更新 -->
+    <section class="card app-card">
+      <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <span class="fw-semibold">应用与引擎更新</span>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="btn-check-update">检查更新</button>
+      </div>
+      <div class="card-body">
+        <div id="update-info">
+          <p class="empty">正在检查更新…</p>
+        </div>
+      </div>
+    </section>
   </main>
 
   <footer class="foot text-center text-secondary small py-3 px-3">
-    m3u8下载器 · 引擎：<a href="https://github.com/nilaoda/N_m3u8DL-RE" target="_blank" rel="noopener">N_m3u8DL-RE</a>（MIT）· 开发者 <a href="https://github.com/Youngxj" target="_blank" rel="noopener">Youngxj</a> · 项目主页：<a href="https://github.com/Youngxj/N_m3u8DL-RE-FN" target="_blank" rel="noopener">N_m3u8DL-RE-FN</a>
+    m3u8下载器 · 引擎：<a href="https://github.com/nilaoda/N_m3u8DL-RE" target="_blank" rel="noopener">N_m3u8DL-RE</a>（MIT）· 开发者 <a href="https://github.com/Youngxj" target="_blank" rel="noopener">Youngxj</a> · 项目主页：<a href="https://github.com/Youngxj/N_m3u8DL-RE-FN" target="_blank" rel="noopener">N_m3u8DL-RE-FN</a> · <span id="foot-version"></span>
   </footer>
 
   <!-- 确认弹窗 -->
@@ -142,6 +154,6 @@
   <div class="toast-container position-fixed bottom-0 end-0 p-3" id="toast-box" style="z-index:2000"></div>
 
   <script src="vendor/bootstrap.bundle.min.js?v=1"></script>
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

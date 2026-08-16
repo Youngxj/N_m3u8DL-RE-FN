@@ -647,6 +647,75 @@ async function initTheme() {
   } catch (_) { /* SDK 不可用时保持默认暗黑 */ }
 }
 
+// ---------- 更新检查 ----------
+// 由 CGI action=update_check 完成：读取本地版本 + 查询 GitHub 最新 Release
+// （引擎走 nilaoda/N_m3u8DL-RE，应用走本项目 Releases）。
+// 网络不可达时后端优雅降级：network 非 "ok"，仅返回本地版本。
+async function checkUpdate(manual) {
+  const box = $('update-info');
+  if (!box) return;
+  if (manual) box.innerHTML = '<p class="empty">正在检查更新…</p>';
+  const data = await act({ action: 'update_check' });
+  renderUpdateInfo(box, data);
+}
+
+function updBadge(upToDate) {
+  if (upToDate === true) return '<span class="upd-badge upd-ok">已是最新</span>';
+  if (upToDate === false) return '<span class="upd-badge upd-new">有新版本</span>';
+  return '<span class="upd-badge upd-unknown">未知</span>';
+}
+
+function renderUpdateInfo(box, d) {
+  if (!d || !d.ok) {
+    box.innerHTML = '<p class="empty">更新检查失败，请稍后重试。</p>';
+    return;
+  }
+  // 页脚显示当前应用版本
+  const fv = $('foot-version');
+  if (fv && d.appVersion) fv.textContent = '当前版本 v' + d.appVersion;
+
+  const parts = [];
+  if (d.network !== 'ok') {
+    const msg = d.network === 'skipped'
+      ? '本环境已禁用联网检查，以下仅显示本地版本信息。'
+      : '⚠️ 无法连接 GitHub（网络受限或 GitHub 不可达），仅显示本地版本信息，请检查网络后重试。';
+    parts.push('<div class="upd-warn">' + esc(msg) + '</div>');
+  }
+
+  // 应用版本行
+  const app = d.app || {};
+  parts.push(
+    '<div class="upd-row">' +
+      '<span class="upd-name">应用版本</span>' +
+      '<span class="upd-cur">' + esc(d.appVersion || '未知') + '</span>' +
+      (app.latest ? '<span class="upd-latest">最新 ' + esc(app.latest) + '</span>' : '') +
+      (app.latest ? updBadge(app.upToDate) : '') +
+      (app.upToDate === false && app.releaseUrl
+        ? '<a class="btn btn-sm btn-primary upd-btn" href="' + esc(app.releaseUrl) + '" target="_blank" rel="noopener">前往下载</a>' : '') +
+      (app.upToDate === false && app.asset && app.asset.url
+        ? '<a class="btn btn-sm btn-outline-primary upd-btn" href="' + esc(app.asset.url) + '" target="_blank" rel="noopener">直接下载 .fpk</a>' : '') +
+    '</div>'
+  );
+
+  // 引擎版本行
+  const eng = d.engine || {};
+  parts.push(
+    '<div class="upd-row">' +
+      '<span class="upd-name">引擎版本</span>' +
+      '<span class="upd-cur">' + esc(d.engineVersion || '未知') + '</span>' +
+      (eng.latest ? '<span class="upd-latest">最新 ' + esc(eng.latest) + '</span>' : '') +
+      (eng.latest ? updBadge(eng.upToDate) : '') +
+      (eng.upToDate === false && eng.releaseUrl
+        ? '<a class="btn btn-sm btn-outline-primary upd-btn" href="' + esc(eng.releaseUrl) + '" target="_blank" rel="noopener">查看引擎更新</a>' : '') +
+    '</div>'
+  );
+
+  if (eng.upToDate === false) {
+    parts.push('<div class="upd-note">💡 引擎新版本将随下一个应用版本一起提供，请关注上方「应用版本」的更新。</div>');
+  }
+  box.innerHTML = parts.join('');
+}
+
 // ---------- 启动：生成配置表单 + 主题 + 轮询刷新 ----------
 const themeBtn = $('btn-theme');
 if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
@@ -654,6 +723,7 @@ initTheme();
 buildCfgForm();
 refreshTasks();
 setInterval(refreshTasks, POLL_MS);
+checkUpdate(false); // 启动时静默检查一次更新（网络不可达时后端优雅降级）
 
 // ---------- 开放平台授权回调（独立浏览器选择目录后跳回本页） ----------
 (function handleAuthCallback() {

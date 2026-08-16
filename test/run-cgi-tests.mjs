@@ -36,7 +36,7 @@ for (const d of [WT, WV, WS, path.join(WT, 'www'), path.join(WT, 'bin'), path.jo
 fs.copyFileSync(path.join(PKG, 'app', 'ui', 'index.cgi'), path.join(WT, 'ui', 'index.cgi'));
 fs.copyFileSync(path.join(PKG, 'app', 'bin', 'task-run.sh'), path.join(WT, 'bin', 'task-run.sh'));
 fs.copyFileSync(path.join(__dirname, 'mock-nre.sh'), path.join(WT, 'bin', 'N_m3u8DL-RE'));
-for (const f of ['index.html', 'app.js', 'style.css']) {
+for (const f of ['index.html', 'app.js', 'style.css', 'version']) {
   fs.copyFileSync(path.join(PKG, 'app', 'www', f), path.join(WT, 'www', f));
 }
 
@@ -164,6 +164,25 @@ async function main() {
   const dl = cgi({ query: `action=download&path=${enc(SHARE + '/测试任务.mp4')}` });
   check('download 返回二进制内容', dl.body.length > 0 && !dl.body.startsWith('{"ok"'), `len=${dl.body.length}`);
 
+  console.log('== 4d. 更新检查（离线模式：NRE_UPDATE_SKIP_NET=1）==');
+  const upd = cgi({ query: 'action=update_check', env: { NRE_UPDATE_SKIP_NET: '1' } });
+  try {
+    const j = JSON.parse(upd.body);
+    check('update_check 返回 ok', j.ok === true, upd.body.slice(0, 120));
+    check('离线模式 network=skipped', j.network === 'skipped', String(j.network));
+    check('返回本地应用版本', typeof j.appVersion === 'string' && j.appVersion.length > 0, JSON.stringify(j.appVersion));
+    check('返回本地引擎版本', typeof j.engineVersion === 'string' && j.engineVersion.length > 0, JSON.stringify(j.engineVersion));
+    check('离线时无最新版本不误报有更新', !(j.engine && j.engine.upToDate === false) && !(j.app && j.app.upToDate === false), upd.body.slice(0, 160));
+    check('离线时 engine/app 字段结构完整', !!(j.engine && typeof j.engine === 'object') && !!(j.app && typeof j.app === 'object'), upd.body.slice(0, 160));
+  } catch (e) {
+    check('update_check 返回合法 JSON', false, upd.body.slice(0, 160));
+  }
+  // 无 version 文件时仍应返回合法 JSON（版本字段为空）
+  const updNoVer = cgi({ query: 'action=update_check', env: { NRE_UPDATE_SKIP_NET: '1', TRIM_APPDEST: toMsys(fs.mkdtempSync(path.join(os.tmpdir(), 'nre-upd-')) + '\\x') } });
+  let updNoVerOk = false;
+  try { const j = JSON.parse(updNoVer.body); updNoVerOk = j.ok === true; } catch (_) {}
+  check('无 version 文件时 update_check 仍 ok', updNoVerOk, updNoVer.body.slice(0, 120));
+
   console.log('== 4b. 无 TRIM_DATA_SHARE_PATHS 时目录回退（shares/ → var/downloads）==');
   const fb = cgi({ method: 'POST', body: `action=create&url=${enc('https://example.com/fallback.m3u8')}&name=回退测试`, env: { TRIM_DATA_SHARE_PATHS: '' } });
   let fbOk = false;
@@ -178,7 +197,7 @@ async function main() {
   fs.copyFileSync(path.join(PKG, 'app', 'ui', 'index.cgi'), path.join(W2, 'ui', 'index.cgi'));
   fs.copyFileSync(path.join(PKG, 'app', 'bin', 'task-run.sh'), path.join(W2, 'bin', 'task-run.sh'));
   fs.copyFileSync(path.join(__dirname, 'mock-nre.sh'), path.join(W2, 'bin', 'N_m3u8DL-RE'));
-  for (const f of ['index.html', 'app.js', 'style.css']) fs.copyFileSync(path.join(PKG, 'app', 'www', f), path.join(W2, 'www', f));
+  for (const f of ['index.html', 'app.js', 'style.css', 'version']) fs.copyFileSync(path.join(PKG, 'app', 'www', f), path.join(W2, 'www', f));
   const CGI2 = toMsys(path.join(W2, 'ui', 'index.cgi'));
   const cgi2 = (opts = {}) => {
     const r = spawnSync(BASH, [CGI2], {

@@ -25,6 +25,7 @@ exec 2>/dev/null
 #   GET  action=files                                      → 已下载文件
 #   GET  action=download&file=xxx.mp4                      → 下载文件
 #   GET  action=delete_file&file=xxx.mp4                   → 删除文件
+#   GET  action=update_check                               → 应用/引擎更新检查（GitHub 不可达时优雅降级）
 
 # ---------- 路径解析 ----------
 # CGI 环境通常没有 TRIM_* 变量，且 readlink -f 会把 /var/apps/{app}/target 符号链接
@@ -691,6 +692,144 @@ ping() {
     "$(bash --version 2>/dev/null | head -n1)"
 }
 
+# ---------- 更新检查 ----------
+# 本地版本信息（app/www/version，构建时由 build-fpk.mjs 生成）：
+#   appVersion=0.6.0-beta.24       应用（fpk）版本
+#   engineVersion=0.6.0-beta       内置引擎版本（N_m3u8DL-RE 上游 tag 去掉 v）
+# 远程检查：引擎走 nilaoda/N_m3u8DL-RE Releases，应用走本项目 Releases；
+# 用 releases?per_page=1 取最新一条（含预发布，releases/latest 会跳过 prerelease）。
+# 网络不可达（部分内网/无 GitHub 环境）时优雅降级：只返回本地版本并给出原因。
+
+# 请求 GitHub API：curl 优先、wget 兜底；响应体输出到 stdout。
+# 返回码：0=成功 1=网络/HTTP 错误 2=本机无 curl/wget
+github_get() {
+  local url="$1"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL --connect-timeout 6 --max-time 15 -A "m3u8_down-update-check/1.0" "$url" 2>/dev/null
+    return $?
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    wget -qO- --timeout=15 -U "m3u8_down-update-check/1.0" "$url" 2>/dev/null
+    return $?
+  fi
+  return 2
+}
+
+# 从 JSON 中提取字段的字符串值（宽松匹配，取首次出现：
+# Release 对象自身的 html_url 排在最前，贪心取末次会误中 author/uploader 的链接）
+parse_json_field() {
+  printf '%s' "$1" | grep -oE "\"$2\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -n 1 | sed -E "s/^\"$2\"[[:space:]]*:[[:space:]]*\"([^\"]*)\"/\1/"
+}
+
+# 版本比较：$1 > $2 → 返回 0（容忍 v 前缀；优先 sort -V 数字感知比较）
+ver_gt() {
+  local a="${1#v}" b="${2#v}"
+  [ -n "$a" ] && [ -n "$b" ] || return 1
+  [ "$a" = "$b" ] && return 1
+  local hi
+  if printf '%s\n%s\n' "$a" "$b" | sort -V >/dev/null 2>&1; then
+    hi="$(printf '%s\n%s\n' "$a" "$b" | sort -V | tail -n 1)"
+  else
+    hi="$(printf '%s\n%s\n' "$a" "$b" | sort | tail -n 1)"
+  fi
+  [ "$hi" = "$a" ]
+}
+
+# 输出 JSON 字符串（空 → null）
+json_str() {
+  if [ -n "$1" ]; then printf '"%s"' "$(printf '%s' "$1" | json_escape)"; else printf 'null'; fi
+}
+
+# 1/0/空 → true/false/null
+json_bool_null() {
+  case "$1" in
+    1) printf 'true' ;;
+    0) printf 'false' ;;
+    *) printf 'null' ;;
+  esac
+}
+
+update_check() {
+  local app_ver="" engine_ver=""
+  if [ -f "$WWW/version" ]; then
+    app_ver="$(sed -n 's/^appVersion=//p' "$WWW/version" | head -n 1)"
+    engine_ver="$(sed -n 's/^engineVersion=//p' "$WWW/version" | head -n 1)"
+  fi
+
+  local net="ok" body="" rc
+  local eng_latest="" eng_pub="" eng_url="" eng_err=""
+  local app_latest="" app_pub="" app_url="" app_err="" asset_name="" asset_url=""
+
+  if [ "${NRE_UPDATE_SKIP_NET:-0}" = "1" ]; then
+    net="skipped"
+  else
+    # 引擎最新版本（上游 nilaoda/N_m3u8DL-RE）
+    body="$(github_get "https://api.github.com/repos/nilaoda/N_m3u8DL-RE/releases?per_page=1")"
+    rc=$?
+    if [ $rc -eq 0 ] && [ -n "$body" ]; then
+      eng_latest="$(parse_json_field "$body" tag_name)"
+      eng_pub="$(parse_json_field "$body" published_at)"
+      eng_url="$(parse_json_field "$body" html_url)"
+      [ -z "$eng_latest" ] && eng_err="GitHub 返回异常（可能暂无发布或接口受限）"
+    elif [ $rc -eq 2 ]; then
+      eng_err="本机无 curl/wget，无法联网"
+      net="unreachable"
+    else
+      eng_err="网络不可达（无法访问 GitHub）"
+      net="unreachable"
+    fi
+
+    # 应用最新版本（本项目 Youngxj/N_m3u8DL-RE-FN，含预发布）
+    body="$(github_get "https://api.github.com/repos/Youngxj/N_m3u8DL-RE-FN/releases?per_page=1")"
+    rc=$?
+    if [ $rc -eq 0 ] && [ -n "$body" ]; then
+      app_latest="$(parse_json_field "$body" tag_name)"
+      app_pub="$(parse_json_field "$body" published_at)"
+      app_url="$(parse_json_field "$body" html_url)"
+      # 提取 fpk 附件名与直链（browser_download_url）
+      asset_name="$(printf '%s' "$body" | grep -oE '"[^"]*_all\.fpk"' | head -n 1 | tr -d '"')"
+      asset_url="$(printf '%s' "$body" | grep -oE '"browser_download_url"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n 1 | sed -E 's/.*"([^"]*)"$/\1/')"
+      [ -z "$app_latest" ] && app_err="GitHub 返回异常（可能暂无发布或接口受限）"
+    elif [ $rc -eq 2 ]; then
+      app_err="本机无 curl/wget，无法联网"
+      net="unreachable"
+    else
+      app_err="网络不可达（无法访问 GitHub）"
+      net="unreachable"
+    fi
+  fi
+
+  # 版本比较：有"本地+最新"才判定；否则 unknown（null）
+  local eng_up="" app_up=""
+  if [ -n "$eng_latest" ] && [ -n "$engine_ver" ]; then
+    if ver_gt "$eng_latest" "$engine_ver"; then eng_up=0; else eng_up=1; fi
+  fi
+  if [ -n "$app_latest" ] && [ -n "$app_ver" ]; then
+    if ver_gt "$app_latest" "$app_ver"; then app_up=0; else app_up=1; fi
+  fi
+
+  local asset_json='null'
+  if [ -n "$asset_name" ]; then
+    asset_json="{\"name\":$(json_str "$asset_name"),\"url\":$(json_str "$asset_url")}"
+  fi
+
+  printf '{"ok":true,"network":"%s","appVersion":%s,"engineVersion":%s,"engine":{"latest":%s,"publishedAt":%s,"releaseUrl":%s,"upToDate":%s,"error":%s},"app":{"latest":%s,"publishedAt":%s,"releaseUrl":%s,"upToDate":%s,"asset":%s,"error":%s}}' \
+    "$net" \
+    "$(json_str "$app_ver")" \
+    "$(json_str "$engine_ver")" \
+    "$(json_str "$eng_latest")" \
+    "$(json_str "$eng_pub")" \
+    "$(json_str "$eng_url")" \
+    "$(json_bool_null "$eng_up")" \
+    "$(json_str "$eng_err")" \
+    "$(json_str "$app_latest")" \
+    "$(json_str "$app_pub")" \
+    "$(json_str "$app_url")" \
+    "$(json_bool_null "$app_up")" \
+    "$asset_json" \
+    "$(json_str "$app_err")"
+}
+
 # ---------- 请求分发 ----------
 # 解析参数：GET query + POST body（保留原始参数用于任务重试）
 QUERY="${QUERY_STRING:-}"
@@ -743,6 +882,7 @@ case "$ACTION" in
   files)        json_header; list_files ;;
   download)     download_file ;;
   delete_file)  json_header; delete_file ;;
+  update_check) json_header; update_check ;;
   ping)         json_header; ping ;;
   *)
     # 静态页面/资源

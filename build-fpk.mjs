@@ -288,6 +288,11 @@ async function main() {
     .replace(/^fpk_version\s*=.*$/m, `fpk_version=${fullVer}`)
     .replace(/^changelog\s*=.*$/m, `changelog=构建 ${fullVer}：基于 N_m3u8DL-RE ${tag} 官方 Release 打包；内置 linux-x64 / linux-arm64 双架构二进制。${note}`);
 
+  // 2b. 生成版本信息文件（供 Web 界面"应用与引擎更新"读取，随包分发）
+  const verFile = path.join(PKG_DIR, "app", "www", "version");
+  fs.writeFileSync(verFile, `appVersion=${fullVer}\nengineVersion=${ver}\nengineTag=${tag}\n`);
+  console.log(`[版本] 写入 ${verFile} (app=${fullVer} engine=${ver})`);
+
   // 3. 生成 app.tgz（app/ 目录内容，去掉 app/ 前缀）
   const tmpDir = fs.mkdtempSync(path.join(args.out, ".tmp-"));
   const appTgzPath = path.join(tmpDir, "app.tgz");
