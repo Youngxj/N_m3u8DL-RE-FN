@@ -394,19 +394,40 @@ function collectCfgParams(params) {
   return params;
 }
 
+// ---------- fnOS SDK 单例（关键：整个页面只与宿主握手一次，重复 new TrimApp() 会导致
+//   宿主只响应首次握手，后续点击打开/浏览静默无响应；重开应用=新页面所以又能用） ----------
+let trimSdkPromise = null;
+function getTrimSdk(force) {
+  if (!trimSdkPromise || force) {
+    trimSdkPromise = (async () => {
+      const mod = await import('./vendor/trim-app.js');
+      const sdk = new mod.TrimApp();
+      await sdk.ready();
+      return sdk;
+    })();
+  }
+  return trimSdkPromise;
+}
+// 返回可用（宿主桥接就绪）的 SDK；不可用时返回 null（调用方可选择重建一次）
+async function sdkReady(force) {
+  try {
+    const sdk = await getTrimSdk(force);
+    if (sdk.isWeb && !sdk.isStandaloneWeb) {
+      try { sdk.getWebMethods(); return sdk; } catch (_) { return null; }
+    }
+  } catch (_) { /* 加载失败 */ }
+  return null;
+}
+
 // 调用 fnOS 打开文件/目录（开放平台 SDK 页面路由能力，无 Scope 要求）
 // 失败时错误可见，并提供"复制路径"兜底
 async function openViaFn(method, path, displayName) {
   try {
-    const mod = await import('./vendor/trim-app.js');
-    const sdk = new mod.TrimApp();
-    await sdk.ready();
-    if (sdk.isWeb && !sdk.isStandaloneWeb) {
-      await sdk[method](path);
-      uiToast('已通过 fnOS 打开' + (displayName ? '：' + displayName : ''), 'success');
-    } else {
-      throw new Error('当前为独立浏览器环境（非桌面/应用中心），fnOS 无法直接打开');
-    }
+    let sdk = await sdkReady(false);
+    if (!sdk) sdk = await sdkReady(true); // 宿主桥接可能晚建立，重建一次
+    if (!sdk) throw new Error('当前为独立浏览器环境或 fnOS 宿主桥接不可用，无法直接打开');
+    await sdk[method](path);
+    uiToast('已通过 fnOS 打开' + (displayName ? '：' + displayName : ''), 'success');
   } catch (e) {
     console.error('[fnOS open]', method, path, e);
     try {
@@ -439,13 +460,12 @@ function extractPickedPath(res) {
   return null;
 }
 
-// 调用 fnOS 文件管理器选择目录（开放平台 JS SDK，动态加载；不支持时回退手动输入）
+// 调用 fnOS 文件管理器选择目录（复用 SDK 单例；不支持时回退手动输入）
 $('btn-browse').addEventListener('click', async () => {
   $('form-msg').textContent = '';
   try {
-    const mod = await import('./vendor/trim-app.js');
-    const sdk = new mod.TrimApp();
-    await sdk.ready();
+    let sdk = await sdkReady(false);
+    if (!sdk) sdk = await sdkReady(true); // 宿主桥接可能晚建立，重建一次
     const params = {
       directory: true,
       title: '选择输出目录',
@@ -453,12 +473,13 @@ $('btn-browse').addEventListener('click', async () => {
       creatable: true,
     };
     let res;
-    if (sdk.isWeb && !sdk.isStandaloneWeb) {
+    if (sdk && sdk.isWeb && !sdk.isStandaloneWeb) {
       // 桌面/应用中心宿主环境：直接调起文件管理器
       res = await sdk.pickUserFile(params);
     } else {
       // 独立浏览器：走 openAppAuth 授权跳转，选完后回调回本页
       $('form-msg').textContent = '正在打开文件管理器…';
+      if (!sdk) throw new Error('SDK 不可用');
       await sdk.openAppAuth('pickUserFile', {
         ...params,
         appName: 'm3u8_down',
@@ -613,11 +634,9 @@ async function initTheme() {
   let saved = null;
   try { saved = localStorage.getItem('m3u8_theme'); } catch (_) {}
   if (saved === 'light' || saved === 'dark') { applyTheme(saved); return; }
-  // 未手动选择过 → 跟随 fnOS 主题（SDK 可用时），默认暗黑
+  // 未手动选择过 → 跟随 fnOS 主题（复用 SDK 单例），默认暗黑
   try {
-    const mod = await import('./vendor/trim-app.js');
-    const sdk = new mod.TrimApp();
-    await sdk.ready();
+    const sdk = await getTrimSdk();
     if (sdk.isWeb) {
       try {
         const cfg = await sdk.getPlatformConfig();
