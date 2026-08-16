@@ -26,6 +26,8 @@ exec 2>/dev/null
 #   GET  action=download&file=xxx.mp4                      → 下载文件
 #   GET  action=delete_file&file=xxx.mp4                   → 删除文件
 #   GET  action=update_check                               → 应用/引擎更新检查（GitHub 不可达时优雅降级）
+#   GET  action=engine_update                              → 一键更新核心引擎（后台下载→校验→原子替换）
+#   GET  action=app_download                               → 一键下载新版应用 fpk 到共享目录
 
 # ---------- 路径解析 ----------
 # CGI 环境通常没有 TRIM_* 变量，且 readlink -f 会把 /var/apps/{app}/target 符号链接
@@ -83,6 +85,19 @@ SHARE_DIR="$(pick_writable_dir \
   "$APP_ROOT/var/downloads" \
   "$APP_ROOT/home/downloads")"
 [ -n "$SHARE_DIR" ] || SHARE_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+
+# 应用数据区（一定可写，存放引擎更新状态 / 更新任务记录；
+# 升级应用时由 install/upgrade_callback 清理，保证以新包内置引擎为准）
+STATE_DIR="$(pick_writable_dir \
+  "${TRIM_PKGVAR}" \
+  "$APP_ROOT/var" \
+  "$APP_ROOT/tmp" \
+  "$APP_ROOT/home" \
+  "$TASKS_DIR")"
+[ -n "$STATE_DIR" ] || STATE_DIR="$TASKS_DIR"
+ENGINE_STATE="$STATE_DIR/engine-version"
+UPDATE_JOB="$STATE_DIR/update-job"
+UPDATER="$TARGET/bin/update-run.sh"
 
 MAX_RUNNING=3   # 同时运行的任务数上限
 
@@ -755,6 +770,12 @@ update_check() {
     app_ver="$(sed -n 's/^appVersion=//p' "$WWW/version" | head -n 1)"
     engine_ver="$(sed -n 's/^engineVersion=//p' "$WWW/version" | head -n 1)"
   fi
+  # 应用内更新过引擎时，以运行状态为准（升级应用后由生命周期脚本清理）
+  local eng_state_ver=""
+  if [ -f "$ENGINE_STATE" ]; then
+    eng_state_ver="$(sed -n 's/^engineVersion=//p' "$ENGINE_STATE" | head -n 1)"
+  fi
+  [ -n "$eng_state_ver" ] && engine_ver="$eng_state_ver"
 
   local net="ok" body="" rc
   local eng_latest="" eng_pub="" eng_url="" eng_err=""
@@ -813,7 +834,7 @@ update_check() {
     asset_json="{\"name\":$(json_str "$asset_name"),\"url\":$(json_str "$asset_url")}"
   fi
 
-  printf '{"ok":true,"network":"%s","appVersion":%s,"engineVersion":%s,"engine":{"latest":%s,"publishedAt":%s,"releaseUrl":%s,"upToDate":%s,"error":%s},"app":{"latest":%s,"publishedAt":%s,"releaseUrl":%s,"upToDate":%s,"asset":%s,"error":%s}}' \
+  printf '{"ok":true,"network":"%s","appVersion":%s,"engineVersion":%s,"engine":{"latest":%s,"publishedAt":%s,"releaseUrl":%s,"upToDate":%s,"error":%s},"app":{"latest":%s,"publishedAt":%s,"releaseUrl":%s,"upToDate":%s,"asset":%s,"error":%s},"updateJob":%s}' \
     "$net" \
     "$(json_str "$app_ver")" \
     "$(json_str "$engine_ver")" \
@@ -827,7 +848,96 @@ update_check() {
     "$(json_str "$app_url")" \
     "$(json_bool_null "$app_up")" \
     "$asset_json" \
-    "$(json_str "$app_err")"
+    "$(json_str "$app_err")" \
+    "$(update_job_json)"
+}
+
+# 更新任务状态（engine_update / app_download 的后台进度）→ JSON 对象或 null
+update_job_json() {
+  [ -f "$UPDATE_JOB" ] || { printf 'null'; return; }
+  local mode status started finished msg ver name path size
+  mode="$(sed -n 's/^mode=//p' "$UPDATE_JOB" | head -n 1)"
+  status="$(sed -n 's/^status=//p' "$UPDATE_JOB" | head -n 1)"
+  started="$(sed -n 's/^startedAt=//p' "$UPDATE_JOB" | head -n 1)"
+  finished="$(sed -n 's/^finishedAt=//p' "$UPDATE_JOB" | head -n 1)"
+  msg="$(sed -n 's/^message=//p' "$UPDATE_JOB" | head -n 1)"
+  ver="$(sed -n 's/^targetVersion=//p' "$UPDATE_JOB" | head -n 1)"
+  name="$(sed -n 's/^name=//p' "$UPDATE_JOB" | head -n 1)"
+  path="$(sed -n 's/^path=//p' "$UPDATE_JOB" | head -n 1)"
+  size="$(sed -n 's/^size=//p' "$UPDATE_JOB" | head -n 1)"
+  printf '{"mode":%s,"status":%s,"targetVersion":%s,"startedAt":%s,"finishedAt":%s,"message":%s,"name":%s,"path":%s,"size":%s}' \
+    "$(json_str "$mode")" \
+    "$(json_str "$status")" \
+    "$(json_str "$ver")" \
+    "$(json_str "$started")" \
+    "$(json_str "$finished")" \
+    "$(json_str "$msg")" \
+    "$(json_str "$name")" \
+    "$(json_str "$path")" \
+    "$(json_str "$size")"
+}
+
+# 后台启动更新任务（setsid 独立会话；无 setsid 退化 nohup）
+spawn_updater() {
+  if command -v setsid >/dev/null 2>&1; then
+    setsid "$UPDATER" "$@" </dev/null >>/dev/null 2>&1 &
+  else
+    nohup "$UPDATER" "$@" </dev/null >>/dev/null 2>&1 &
+  fi
+}
+
+# 是否有更新任务进行中
+update_busy() {
+  [ "$(sed -n 's/^status=//p' "$UPDATE_JOB" 2>/dev/null | head -n 1)" = "running" ]
+}
+
+# 一键更新核心引擎（下载→校验→原子替换，后台执行）
+engine_update() {
+  update_busy && { echo '{"ok":false,"error":"已有更新任务进行中，请稍候"}'; return; }
+  if [ "${NRE_UPDATE_SKIP_NET:-0}" = "1" ]; then
+    echo '{"ok":false,"error":"当前环境已禁用联网（测试模式）"}'
+    return
+  fi
+  local arch arch_dir
+  arch="$(uname -m 2>/dev/null)"
+  case "$arch" in
+    x86_64|amd64)   arch_dir="$TARGET/bin/x64" ;;
+    aarch64|arm64)  arch_dir="$TARGET/bin/arm64" ;;
+    *) echo '{"ok":false,"error":"不支持的 CPU 架构"}'; return ;;
+  esac
+  if [ ! -d "$arch_dir" ]; then
+    echo "{\"ok\":false,\"error\":\"引擎目录不存在: $arch_dir\"}"
+    return
+  fi
+  if [ ! -w "$arch_dir" ]; then
+    echo "{\"ok\":false,\"error\":\"引擎目录不可写: $arch_dir（请通过新版应用获取新引擎）\"}"
+    return
+  fi
+  if [ ! -f "$UPDATER" ]; then
+    echo '{"ok":false,"error":"缺少更新执行脚本，请通过新版应用获取"}'
+    return
+  fi
+  spawn_updater engine "$STATE_DIR" "$arch_dir" "$ENGINE_STATE"
+  echo '{"ok":true,"started":true}'
+}
+
+# 一键下载新版应用 fpk 到共享目录（供应用中心手动安装）
+app_download() {
+  update_busy && { echo '{"ok":false,"error":"已有更新任务进行中，请稍候"}'; return; }
+  if [ "${NRE_UPDATE_SKIP_NET:-0}" = "1" ]; then
+    echo '{"ok":false,"error":"当前环境已禁用联网（测试模式）"}'
+    return
+  fi
+  if [ ! -d "$SHARE_DIR" ] || [ ! -w "$SHARE_DIR" ]; then
+    echo '{"ok":false,"error":"共享目录不可写，无法保存新版应用"}'
+    return
+  fi
+  if [ ! -f "$UPDATER" ]; then
+    echo '{"ok":false,"error":"缺少更新执行脚本，请通过新版应用获取"}'
+    return
+  fi
+  spawn_updater app "$STATE_DIR" "$SHARE_DIR"
+  echo '{"ok":true,"started":true}'
 }
 
 # ---------- 请求分发 ----------
@@ -883,6 +993,8 @@ case "$ACTION" in
   download)     download_file ;;
   delete_file)  json_header; delete_file ;;
   update_check) json_header; update_check ;;
+  engine_update) json_header; engine_update ;;
+  app_download) json_header; app_download ;;
   ping)         json_header; ping ;;
   *)
     # 静态页面/资源

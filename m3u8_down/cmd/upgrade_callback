@@ -7,5 +7,13 @@ BIN_ROOT="$TRIM_APPDEST/bin"
 chmod 755 "$BIN_ROOT/N_m3u8DL-RE" 2>/dev/null || true
 chmod 755 "$BIN_ROOT/x64/N_m3u8DL-RE" 2>/dev/null || true
 chmod 755 "$BIN_ROOT/arm64/N_m3u8DL-RE" 2>/dev/null || true
+chmod 755 "$BIN_ROOT/task-run.sh" 2>/dev/null || true
+chmod 755 "$BIN_ROOT/update-run.sh" 2>/dev/null || true
+
+# 清理运行时引擎更新状态（升级后以新包内置引擎为准）
+if [ -n "$TRIM_PKGVAR" ]; then
+  rm -f "$TRIM_PKGVAR/engine-version" "$TRIM_PKGVAR/update-job" 2>/dev/null || true
+  rm -rf "$TRIM_PKGVAR/update-tmp" 2>/dev/null || true
+fi
 
 exit 0

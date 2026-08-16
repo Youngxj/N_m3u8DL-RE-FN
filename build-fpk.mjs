@@ -51,6 +51,7 @@ const EXEC_FILES = new Set([
   "cmd/config_callback",
   "app/bin/N_m3u8DL-RE",
   "app/bin/task-run.sh",
+  "app/bin/update-run.sh",
   "app/bin/x64/N_m3u8DL-RE",
   "app/bin/arm64/N_m3u8DL-RE",
   "app/ui/index.cgi",

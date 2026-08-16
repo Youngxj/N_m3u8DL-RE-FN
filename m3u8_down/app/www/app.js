@@ -651,12 +651,16 @@ async function initTheme() {
 // 由 CGI action=update_check 完成：读取本地版本 + 查询 GitHub 最新 Release
 // （引擎走 nilaoda/N_m3u8DL-RE，应用走本项目 Releases）。
 // 网络不可达时后端优雅降级：network 非 "ok"，仅返回本地版本。
+// 引擎/应用更新由后台任务执行（updateJob 轮询进度）。
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function checkUpdate(manual) {
   const box = $('update-info');
-  if (!box) return;
+  if (!box) return null;
   if (manual) box.innerHTML = '<p class="empty">正在检查更新…</p>';
   const data = await act({ action: 'update_check' });
   renderUpdateInfo(box, data);
+  return data;
 }
 
 function updBadge(upToDate) {
@@ -682,39 +686,101 @@ function renderUpdateInfo(box, d) {
     parts.push('<div class="upd-warn">' + esc(msg) + '</div>');
   }
 
+  // 更新任务进行中提示
+  const job = d.updateJob;
+  if (job && job.status === 'running') {
+    const what = job.mode === 'engine' ? '核心引擎' : '新版应用';
+    const target = job.targetVersion ? ' → v' + job.targetVersion : '';
+    parts.push('<div class="upd-warn upd-running">⏳ 正在更新' + what + target + '…（大文件下载可能需要几分钟，请勿关闭页面）</div>');
+  } else if (job && job.status === 'failed') {
+    parts.push('<div class="upd-warn">❌ 上次更新失败：' + esc(job.message || '未知原因') + '</div>');
+  } else if (job && job.status === 'ok') {
+    const okMsg = job.message || '更新完成';
+    parts.push('<div class="upd-warn upd-okline">✅ ' + esc(okMsg) +
+      (job.path ? '<div class="upd-path">' + esc(job.path) + '</div>' +
+        '<button type="button" class="btn btn-sm btn-outline-primary upd-btn" id="btn-open-update-dir">打开所在目录</button>' : '') +
+      '</div>');
+  }
+
   // 应用版本行
   const app = d.app || {};
+  const appBusy = job && job.status === 'running' && job.mode === 'app';
   parts.push(
     '<div class="upd-row">' +
       '<span class="upd-name">应用版本</span>' +
       '<span class="upd-cur">' + esc(d.appVersion || '未知') + '</span>' +
       (app.latest ? '<span class="upd-latest">最新 ' + esc(app.latest) + '</span>' : '') +
       (app.latest ? updBadge(app.upToDate) : '') +
+      (app.upToDate === false && !appBusy
+        ? '<button type="button" class="btn btn-sm btn-primary upd-btn" id="btn-download-app">下载新版 (.fpk)</button>' : '') +
       (app.upToDate === false && app.releaseUrl
-        ? '<a class="btn btn-sm btn-primary upd-btn" href="' + esc(app.releaseUrl) + '" target="_blank" rel="noopener">前往下载</a>' : '') +
-      (app.upToDate === false && app.asset && app.asset.url
-        ? '<a class="btn btn-sm btn-outline-primary upd-btn" href="' + esc(app.asset.url) + '" target="_blank" rel="noopener">直接下载 .fpk</a>' : '') +
+        ? '<a class="btn btn-sm btn-outline-primary upd-btn" href="' + esc(app.releaseUrl) + '" target="_blank" rel="noopener">Release 页面</a>' : '') +
     '</div>'
   );
 
   // 引擎版本行
   const eng = d.engine || {};
+  const engBusy = job && job.status === 'running' && job.mode === 'engine';
   parts.push(
     '<div class="upd-row">' +
       '<span class="upd-name">引擎版本</span>' +
       '<span class="upd-cur">' + esc(d.engineVersion || '未知') + '</span>' +
       (eng.latest ? '<span class="upd-latest">最新 ' + esc(eng.latest) + '</span>' : '') +
       (eng.latest ? updBadge(eng.upToDate) : '') +
+      (eng.upToDate === false && !engBusy
+        ? '<button type="button" class="btn btn-sm btn-primary upd-btn" id="btn-update-engine">更新引擎</button>' : '') +
       (eng.upToDate === false && eng.releaseUrl
-        ? '<a class="btn btn-sm btn-outline-primary upd-btn" href="' + esc(eng.releaseUrl) + '" target="_blank" rel="noopener">查看引擎更新</a>' : '') +
+        ? '<a class="btn btn-sm btn-outline-primary upd-btn" href="' + esc(eng.releaseUrl) + '" target="_blank" rel="noopener">引擎 Release</a>' : '') +
     '</div>'
   );
 
   if (eng.upToDate === false) {
-    parts.push('<div class="upd-note">💡 引擎新版本将随下一个应用版本一起提供，请关注上方「应用版本」的更新。</div>');
+    parts.push('<div class="upd-note">💡 也可点击「更新引擎」应用内直接升级核心引擎；或等待新版应用（内置新引擎）发布后升级应用。</div>');
   }
   box.innerHTML = parts.join('');
+
+  // 按钮事件
+  box.querySelector('#btn-update-engine')?.addEventListener('click', () => startEngineUpdate());
+  box.querySelector('#btn-download-app')?.addEventListener('click', () => startAppDownload());
+  box.querySelector('#btn-open-update-dir')?.addEventListener('click', () => {
+    if (job && job.path) openViaFn('openFileManager', dirOf(job.path), dirOf(job.path));
+  });
 }
+
+// 启动引擎更新（后台下载→校验→原子替换）
+async function startEngineUpdate() {
+  if (!(await uiConfirm('将下载并替换核心引擎为最新版（更新不影响已有任务）。确定继续吗？'))) return;
+  const data = await act({ action: 'engine_update' });
+  if (!data.ok) { uiToast(data.error || '引擎更新启动失败'); checkUpdate(false); return; }
+  uiToast('引擎更新已开始，请稍候…', 'warn');
+  waitUpdateJob();
+}
+
+// 启动新版应用下载（fpk → 共享目录）
+async function startAppDownload() {
+  if (!(await uiConfirm('将下载新版应用安装包（.fpk）到共享目录，下载完成后需到「应用中心 → 手动安装」升级。确定继续吗？'))) return;
+  const data = await act({ action: 'app_download' });
+  if (!data.ok) { uiToast(data.error || '下载启动失败'); checkUpdate(false); return; }
+  uiToast('新版应用下载已开始，请稍候…', 'warn');
+  waitUpdateJob();
+}
+
+// 轮询更新任务直到结束（最多约 5 分钟）
+async function waitUpdateJob() {
+  for (let i = 0; i < 150; i++) {
+    const data = await checkUpdate(false);
+    const job = data && data.updateJob;
+    if (!job || job.status !== 'running') {
+      if (job && job.status === 'ok') uiToast(job.message || '更新完成', 'success');
+      else if (job && job.status === 'failed') uiToast(job.message || '更新失败', 'danger');
+      return;
+    }
+    await sleep(2000);
+  }
+  uiToast('更新任务耗时过长，请稍后在「检查更新」中查看结果', 'warn');
+}
+
+$('btn-check-update')?.addEventListener('click', () => checkUpdate(true));
 
 // ---------- 启动：生成配置表单 + 主题 + 轮询刷新 ----------
 const themeBtn = $('btn-theme');

@@ -35,6 +35,7 @@ for (const d of [WT, WV, WS, path.join(WT, 'www'), path.join(WT, 'bin'), path.jo
 // 复制真实文件到假目录
 fs.copyFileSync(path.join(PKG, 'app', 'ui', 'index.cgi'), path.join(WT, 'ui', 'index.cgi'));
 fs.copyFileSync(path.join(PKG, 'app', 'bin', 'task-run.sh'), path.join(WT, 'bin', 'task-run.sh'));
+fs.copyFileSync(path.join(PKG, 'app', 'bin', 'update-run.sh'), path.join(WT, 'bin', 'update-run.sh'));
 fs.copyFileSync(path.join(__dirname, 'mock-nre.sh'), path.join(WT, 'bin', 'N_m3u8DL-RE'));
 for (const f of ['index.html', 'app.js', 'style.css', 'version']) {
   fs.copyFileSync(path.join(PKG, 'app', 'www', f), path.join(WT, 'www', f));
@@ -183,6 +184,20 @@ async function main() {
   try { const j = JSON.parse(updNoVer.body); updNoVerOk = j.ok === true; } catch (_) {}
   check('无 version 文件时 update_check 仍 ok', updNoVerOk, updNoVer.body.slice(0, 120));
 
+  console.log('== 4e. 引擎更新 / 应用下载（离线模式）==');
+  const engUpd = cgi({ query: 'action=engine_update', env: { NRE_UPDATE_SKIP_NET: '1' } });
+  let engUpdOk = false;
+  try { const j = JSON.parse(engUpd.body); engUpdOk = j.ok === false && /禁用联网/.test(j.error || ''); } catch (_) {}
+  check('engine_update 离线时拒绝并提示', engUpdOk, engUpd.body.slice(0, 120));
+  const appDl = cgi({ query: 'action=app_download', env: { NRE_UPDATE_SKIP_NET: '1' } });
+  let appDlOk = false;
+  try { const j = JSON.parse(appDl.body); appDlOk = j.ok === false && /禁用联网/.test(j.error || ''); } catch (_) {}
+  check('app_download 离线时拒绝并提示', appDlOk, appDl.body.slice(0, 120));
+  const updJob = cgi({ query: 'action=update_check', env: { NRE_UPDATE_SKIP_NET: '1' } });
+  let jobFieldOk = false;
+  try { const j = JSON.parse(updJob.body); jobFieldOk = j.updateJob === null || (j.updateJob && typeof j.updateJob === 'object'); } catch (_) {}
+  check('update_check 含 updateJob 字段', jobFieldOk, updJob.body.slice(0, 160));
+
   console.log('== 4b. 无 TRIM_DATA_SHARE_PATHS 时目录回退（shares/ → var/downloads）==');
   const fb = cgi({ method: 'POST', body: `action=create&url=${enc('https://example.com/fallback.m3u8')}&name=回退测试`, env: { TRIM_DATA_SHARE_PATHS: '' } });
   let fbOk = false;
@@ -196,6 +211,7 @@ async function main() {
   for (const d of [path.join(W2, 'ui'), path.join(W2, 'bin'), path.join(W2, 'www'), path.join(W2, 'var'), path.join(W2, 'shares')]) fs.mkdirSync(d, { recursive: true });
   fs.copyFileSync(path.join(PKG, 'app', 'ui', 'index.cgi'), path.join(W2, 'ui', 'index.cgi'));
   fs.copyFileSync(path.join(PKG, 'app', 'bin', 'task-run.sh'), path.join(W2, 'bin', 'task-run.sh'));
+  fs.copyFileSync(path.join(PKG, 'app', 'bin', 'update-run.sh'), path.join(W2, 'bin', 'update-run.sh'));
   fs.copyFileSync(path.join(__dirname, 'mock-nre.sh'), path.join(W2, 'bin', 'N_m3u8DL-RE'));
   for (const f of ['index.html', 'app.js', 'style.css', 'version']) fs.copyFileSync(path.join(PKG, 'app', 'www', f), path.join(W2, 'www', f));
   const CGI2 = toMsys(path.join(W2, 'ui', 'index.cgi'));

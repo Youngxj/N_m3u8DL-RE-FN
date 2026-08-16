@@ -208,3 +208,9 @@ body {
 .upd-badge.upd-unknown { background: var(--bs-secondary-bg); color: var(--bs-secondary-color); }
 .upd-btn { margin-left: auto; }
 .upd-note { font-size: 12.5px; color: var(--bs-secondary-color); padding: 0 4px; }
+.upd-running { color: var(--accent); border-color: rgba(46, 130, 255, 0.4); background: rgba(46, 130, 255, 0.1); }
+.upd-okline { color: var(--ok); border-color: rgba(34, 197, 94, 0.4); background: rgba(34, 197, 94, 0.1); }
+.upd-path {
+  font-family: var(--mono); font-size: 12px; margin-top: 6px;
+  color: var(--code-fg); word-break: break-all;
+}
