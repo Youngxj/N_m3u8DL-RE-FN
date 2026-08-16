@@ -63,11 +63,17 @@ let dir = '';
 // ---------- 任务渲染（仅更新变化部分，避免 300ms 全量重绘导致按钮 hover 闪烁） ----------
 function renderTasks() {
   const list = $('task-list');
-  $('task-count').textContent = tasks.length;
+  // 数量标识：只显示进行中（排队/下载/停止中）任务数，全部结束后隐藏
+  const active = tasks.filter((t) => ['queued', 'running', 'stopping'].includes(t.status)).length;
+  const countEl = $('task-count');
+  countEl.textContent = active;
+  countEl.classList.toggle('d-none', active === 0);
   if (!tasks.length) {
     list.innerHTML = '<p class="empty">暂无任务，在上方创建第一个下载任务吧。</p>';
     return;
   }
+  // 清除可能残留的空状态提示
+  list.querySelectorAll('.empty').forEach((e) => e.remove());
   const existing = new Set();
   tasks.forEach((t) => {
     existing.add(t.id);

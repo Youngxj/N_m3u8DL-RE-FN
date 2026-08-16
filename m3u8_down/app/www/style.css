@@ -105,13 +105,16 @@ body {
 .cfg-field .cfg-hint { font-size: 10.5px; color: var(--hint-fg); line-height: 1.3; }
 .cfg-full { grid-column: 1 / -1; }
 
-/* 配置折叠卡内边距（内容不贴边） */
+/* 配置折叠卡内边距（内容不贴边；padding 加在折叠容器上） */
 #cfg-accordion .accordion-item { margin-bottom: 10px; border-radius: 10px; overflow: hidden; }
 #cfg-accordion .accordion-item:last-child { margin-bottom: 0; }
+#cfg-accordion .accordion-collapse { padding: 20px; }
 #cfg-accordion .accordion-body { padding: 0; }
 #cfg-accordion .accordion-button { font-weight: 600; }
 #cfg-accordion .accordion-button:not(.collapsed) { box-shadow: none; }
-.cfg-group { padding: 20px; }
+
+/* 确认弹窗文本：允许换行，超长路径不溢出 */
+#confirm-text { white-space: normal; word-break: break-all; }
 
 /* 任务列表 */
 .task-list { display: grid; gap: 12px; }
