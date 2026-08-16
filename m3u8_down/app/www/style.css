@@ -1,5 +1,5 @@
-/* m3u8下载器 — Bootstrap 5 暗色主题之上的自定义样式 */
-:root {
+/* m3u8下载器 — Bootstrap 5 主题之上的自定义样式（暗/亮两套配色） */
+:root, [data-bs-theme="dark"] {
   --brand-1: #2e82ff;
   --brand-2: #0a60e0;
   --accent: #2e82ff;
@@ -7,12 +7,28 @@
   --warn: #f59e0b;
   --err: #ef4444;
   --mono: "Cascadia Code", "Consolas", "JetBrains Mono", monospace;
+  --app-bg: radial-gradient(1200px 500px at 50% -10%, #1d2a47 0%, #10151f 55%);
+  --topbar-bg: rgba(20, 27, 46, 0.78);
+  --code-bg: #0d1322;
+  --code-fg: #a8b6d8;
+  --hint-fg: #5d6b8c;
+  --progress-bg: #0d1322;
+}
+[data-bs-theme="light"] {
+  --brand-1: #0a6cff;
+  --brand-2: #0a60e0;
+  --accent: #0a6cff;
+  --app-bg: radial-gradient(1200px 500px at 50% -10%, #dbe8ff 0%, #eef2f7 55%);
+  --topbar-bg: rgba(255, 255, 255, 0.82);
+  --code-bg: #f1f3f7;
+  --code-fg: #4a5568;
+  --hint-fg: #8a94a6;
+  --progress-bg: #e2e8f0;
 }
 
 body {
-  background: radial-gradient(1200px 500px at 50% -10%, #1d2a47 0%, #10151f 55%);
+  background: var(--app-bg);
   min-height: 100vh;
-  color-scheme: dark;
 }
 
 /* 顶栏 */
@@ -20,7 +36,7 @@ body {
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; flex-wrap: wrap;
   padding: 12px 22px;
-  background: rgba(20, 27, 46, 0.78);
+  background: var(--topbar-bg);
   backdrop-filter: blur(8px);
   position: sticky; top: 0; z-index: 10;
 }
@@ -80,8 +96,15 @@ body {
 .cfg-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--bs-secondary-color); min-width: 0; }
 .cfg-field .form-control, .cfg-field .form-select { font-size: 13px; }
 .cfg-field textarea { font-family: var(--mono); font-size: 12.5px; resize: vertical; }
-.cfg-field .cfg-hint { font-size: 10.5px; color: #5d6b8c; line-height: 1.3; }
+.cfg-field .cfg-hint { font-size: 10.5px; color: var(--hint-fg); line-height: 1.3; }
 .cfg-full { grid-column: 1 / -1; }
+
+/* 配置折叠卡内边距（避免内容贴边） */
+#cfg-accordion .accordion-item { margin-bottom: 10px; border-radius: 10px; overflow: hidden; }
+#cfg-accordion .accordion-item:last-child { margin-bottom: 0; }
+#cfg-accordion .accordion-body { padding: 1.25rem 1.25rem 1.4rem; }
+#cfg-accordion .accordion-button { font-weight: 600; }
+#cfg-accordion .accordion-button:not(.collapsed) { box-shadow: none; }
 
 /* 任务列表 */
 .task-list { display: grid; gap: 12px; }
@@ -105,7 +128,7 @@ body {
 @keyframes pulse { 50% { opacity: 0.55; } }
 
 .progress-wrap { margin-top: 10px; display: flex; align-items: center; gap: 10px; }
-.progress { flex: 1; min-width: 0; height: 8px; background: #0d1322; }
+.progress { flex: 1; min-width: 0; height: 8px; background: var(--progress-bg); }
 .progress-bar {
   background: linear-gradient(90deg, var(--brand-1), #6ab0ff);
 }
@@ -116,8 +139,8 @@ body {
 .task-stats b { color: var(--bs-body-color); font-variant-numeric: tabular-nums; }
 
 .task-last {
-  margin-top: 8px; background: #0d1322; border-radius: 8px; padding: 7px 10px;
-  font-family: var(--mono); font-size: 12px; line-height: 1.5; color: #a8b6d8;
+  margin-top: 8px; background: var(--code-bg); border-radius: 8px; padding: 7px 10px;
+  font-family: var(--mono); font-size: 12px; line-height: 1.5; color: var(--code-fg);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .task-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }

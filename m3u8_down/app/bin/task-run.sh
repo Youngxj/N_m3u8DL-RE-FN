@@ -3,8 +3,7 @@
 #
 # 用法: task-run.sh <meta文件> <日志文件> <N_m3u8DL-RE二进制> <参数...>
 # 职责:
-#   1. 运行 N_m3u8DL-RE（优先通过 script 分配 PTY，让进度逐帧实时写入日志，
-#      避免重定向到文件时的块缓冲导致"多端进度不同步"）
+#   1. 运行 N_m3u8DL-RE，输出重定向到日志文件（前端轮询读取 CLI 状态）
 #   2. 结束后把退出码/结束时间写入 meta
 #   3. 对比任务开始前的输出目录快照，识别并记录本任务产生的文件
 #      （outputFiles=<逗号分隔>，供"已下载文件"列表使用，不扫描目录）
@@ -18,14 +17,7 @@ shift 3
 
 echo "startedAt=$(date -Is)" >> "$META"
 
-# 优先用 script 分配 PTY（util-linux），使 N_m3u8DL-RE 逐帧刷新输出；
-# 无 script 的环境（如本地测试）退化为直接运行。
-if command -v script >/dev/null 2>&1; then
-  CMD_STR="$(printf '%q ' "$BIN" "$@")"
-  script -q -e -f -c "$CMD_STR" /dev/null > "$LOG" 2>&1
-else
-  "$BIN" "$@" > "$LOG" 2>&1
-fi
+"$BIN" "$@" > "$LOG" 2>&1
 RC=$?
 
 echo "exitCode=$RC" >> "$META"

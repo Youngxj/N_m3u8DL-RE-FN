@@ -39,7 +39,7 @@ const STATUS_TEXT = {
   queued: '排队中', running: '下载中', stopping: '停止中',
   success: '已完成', failed: '失败', stopped: '已停止',
 };
-const POLL_MS = 500; // 轮询间隔（越短越接近 CLI 实时）
+const POLL_MS = 300; // 轮询间隔（轮询 CLI 日志，越快越接近实时）
 
 function fmtSize(bytes) {
   if (bytes == null) return '—';
@@ -546,28 +546,26 @@ async function loadFiles() {
   }
 }
 
-// ---------- 应用访问路径弹窗 ----------
-$('btn-app-path').addEventListener('click', () => {
-  $('app-path-value').value = location.origin + location.pathname;
-  new bootstrap.Modal($('pathModal')).show();
-});
-$('btn-copy-path').addEventListener('click', async () => {
-  const v = $('app-path-value').value;
-  try {
-    await navigator.clipboard.writeText(v);
-    uiToast('已复制：' + v, 'success');
-  } catch (_) {
-    $('app-path-value').select();
-    document.execCommand('copy');
-    uiToast('已复制', 'success');
-  }
-});
-
-// ---------- 主题自动识别（默认暗黑；fnOS 宿主可用时跟随系统主题） ----------
+// ---------- 主题切换（默认暗黑；可手动切换并记忆） ----------
 function applyTheme(theme) {
-  document.documentElement.dataset.bsTheme = theme === 'light' ? 'light' : 'dark';
+  const t = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.bsTheme = t;
+  const icon = document.querySelector('#btn-theme svg path');
+  if (icon) icon.setAttribute('d', t === 'dark'
+    ? 'M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z'
+    : 'M6 .278a.77.77 0 0 1 .08.858 7.2 7.2 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.35 8.35 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z');
+}
+function toggleTheme() {
+  const cur = document.documentElement.dataset.bsTheme === 'light' ? 'light' : 'dark';
+  const next = cur === 'light' ? 'dark' : 'light';
+  applyTheme(next);
+  try { localStorage.setItem('m3u8_theme', next); } catch (_) {}
 }
 async function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem('m3u8_theme'); } catch (_) {}
+  if (saved === 'light' || saved === 'dark') { applyTheme(saved); return; }
+  // 未手动选择过 → 跟随 fnOS 主题（SDK 可用时），默认暗黑
   try {
     const mod = await import('./vendor/trim-app.js');
     const sdk = new mod.TrimApp();
@@ -576,15 +574,17 @@ async function initTheme() {
       try {
         const cfg = await sdk.getPlatformConfig();
         if (cfg && cfg.theme) applyTheme(cfg.theme);
-        sdk.$on('os/theme', (t) => applyTheme(t && t.theme ? t.theme : t));
+        sdk.$on('os/theme', (t) => { if (!localStorage.getItem('m3u8_theme')) applyTheme(t && t.theme ? t.theme : t); });
       } catch (_) { /* 保持默认暗黑 */ }
     }
   } catch (_) { /* SDK 不可用时保持默认暗黑 */ }
 }
 
 // ---------- 启动：生成配置表单 + 主题 + 轮询刷新 ----------
-buildCfgForm();
+const themeBtn = $('btn-theme');
+if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
 initTheme();
+buildCfgForm();
 refreshTasks();
 setInterval(refreshTasks, POLL_MS);
 
